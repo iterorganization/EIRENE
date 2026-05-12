@@ -222,8 +222,10 @@ if (B25_EIRENE)
     add_definitions(-DDIMENSIONS_MODULE)
     if(EXISTS "$ENV{SOLPSTOP}/modules/B2.5/src/modules.local/b2mod_dimensions.F")
       include_directories($ENV{SOLPSTOP}/modules/B2.5/src/modules.local)
+      set(B2MOD_DIMENSIONS_SRC "$ENV{SOLPSTOP}/modules/B2.5/src/modules.local/b2mod_dimensions.F")
     else()
       include_directories($ENV{SOLPSTOP}/modules/B2.5/src/modules)
+      set(B2MOD_DIMENSIONS_SRC "$ENV{SOLPSTOP}/modules/B2.5/src/modules/b2mod_dimensions.F")
     endif()
   endif()
   set(GR-DUMMY_LIBRARY_NAME "gr_dummy" CACHE STRING "GR-DUMMY library name")
@@ -484,6 +486,31 @@ add_library(EIRENE ${src_assistant} ${src_broadcast} ${src_diagno}
 
 if(B25_EIRENE)
   add_library(GR-DUMMY ${src_grsoft-dummy})
+  # When coupling to B2.5 with the DIMENSIONS_MODULE pragma, eirmod_extrab25.F90
+  # contains a `use b2mod_dimensions` statement and needs the corresponding
+  # .mod file in this build directory.  The legacy NO_CMAKE workflow
+  # (modules/Eirene/config/Makefile) symlinks B2.5's b2mod_dimensions.F into
+  # interfaces/couple_SOLPS-ITER/, where the file(GLOB) above can pick it up;
+  # but for clean cmake builds (foss/2025b, intel/2025b) the symlink is not
+  # always in place at configure time, so the GLOB misses it and the build
+  # relies on a stale .mod from a previous Carre/B2.5 build.
+  #
+  # Make the cmake configuration self-contained: drop any Eirene-side
+  # b2mod_dimensions.F (the legacy symlink, if present) from EIRENE's source
+  # list so we don't end up compiling the file twice (which races the
+  # b2mod_dimensions.mod output between two parallel compile rules), and add
+  # B2.5's authoritative copy explicitly.  OBJECT_DEPENDS on
+  # eirmod_extrab25.F90 ensures it is rebuilt if b2mod_dimensions.F changes.
+  if(DIMENSIONS_MODULE AND B2MOD_DIMENSIONS_SRC)
+    get_target_property(_eirene_sources EIRENE SOURCES)
+    list(REMOVE_ITEM _eirene_sources
+      ${PROJECT_SOURCE_DIR}/interfaces/couple_${EIRENE_INTERFACE}/b2mod_dimensions.F)
+    set_target_properties(EIRENE PROPERTIES SOURCES "${_eirene_sources}")
+    target_sources(EIRENE PRIVATE ${B2MOD_DIMENSIONS_SRC})
+    set_source_files_properties(
+      ${PROJECT_SOURCE_DIR}/interfaces/couple_${EIRENE_INTERFACE}/eirmod_extrab25.F90
+      PROPERTIES OBJECT_DEPENDS ${B2MOD_DIMENSIONS_SRC})
+  endif()
 endif()
 
 if( NOT B25_EIRENE )
