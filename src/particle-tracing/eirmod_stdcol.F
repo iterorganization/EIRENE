@@ -383,7 +383,7 @@ C
          IRET = IRET_OUT
          RETURN
       ENDIF
-      IF (NLTRC.AND.EIRENE_IDEZ(ILIIN(MSURF),1,2).LE.4) THEN
+      IF (NLTRC) THEN
 #if ( defined(USE_OPENMP) || defined(USE_EXT_OPENMP) )
 !$OMP CRITICAL
 #endif

@@ -10,9 +10,6 @@ C
 #ifdef USE_MPI
       INTEGER :: IER
       LOGICAL :: LXOWN
-#ifndef GFORTRAN
-      EXTERNAL :: MPI_ALLGATHER
-#endif
 #endif
       EXTERNAL :: EIRENE_PLEND, IOFLUSH_USR
 

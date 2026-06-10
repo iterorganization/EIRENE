@@ -49,6 +49,7 @@ C> - tallies
       USE EIRMOD_CPES, ONLY: NEED_CALSTR, CALC_STRATUM,
      .                       GET_STRATUM_COMM, I_AM_LEADER,
      ,                       STRATEGY_BALANCED, STRATEGY_IMPROVED,
+     ,                       STRATEGY_SIMPLE,
      ,                       WORK_DISTRIBUTION_STRATEGY
       USE EIRMOD_CSDVI, ONLY: NSIGI_SPC, SDVI1, SDVI2, SIGMAC, SGMCS
       USE EIRMOD_COUTAU
@@ -94,6 +95,7 @@ C Need to clarify what eirene_calstr_usr does with my_pe_gr.
         end if
 
         if (work_distribution_strategy == STRATEGY_BALANCED .or.
+     &      work_distribution_strategy == STRATEGY_SIMPLE   .or.
      &      work_distribution_strategy == STRATEGY_IMPROVED) then
           call eirene_calstr_buffered(calstr_comm, my_pe_gr,
      &                                I_am_leader(istra))

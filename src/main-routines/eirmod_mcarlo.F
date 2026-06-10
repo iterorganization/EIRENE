@@ -187,6 +187,8 @@ C     used only for IMPROVED strategy
 C
       LOGICAL :: LOGHELP(NSTRA)
       LOGICAL :: LSTP
+      INTEGER, DIMENSION(NSTRA) :: NPTSSORT
+      INTEGER, DIMENSION(NSTRA) :: ISTRASORT
       EXTERNAL :: EIRENE_ALGTAL, EIRENE_BROAD_IESTR, EIRENE_CALSTR,
      .            EIRENE_CLEAR_STRATUM, EIRENE_CLEAR_SUMOSTRA,
      .            EIRENE_COLLECT_CENSUS, EIRENE_COLLECT_COUTAU,
@@ -221,7 +223,7 @@ C
       tim1 = timi
       timst= timi
 C
-      IF (NFILEN.NE.0) THEN
+      IF (NFILEN.NE.0.AND. MY_PE==0) THEN
         NREC11=NOUTAU
         OPEN (UNIT=11+ifoff,ACCESS='DIRECT',FORM='UNFORMATTED',
      .        RECL=8*NREC11)
@@ -472,25 +474,10 @@ C
      .   'ON CENSUS (TIME DEP MODE):'
         WRITE(iunout,*) 'PROP. TO CPU TIME ALLOCATED FOR EACH STRATUM'
         DO ISTRAI=1,NSTRAI
-          XFACT=XTIM(ISTRAI)/XX1 !VKMPI
+          XFACT=XTIM(ISTRAI)/XX1/NPRS !VKMPI
           XPRNLS        =NPRNLI*XFACT+0.5
-          NPRNLS(ISTRAI)=INT(XPRNLS)
+          NPRNLS(ISTRAI)=MAX(1,INT(XPRNLS))
         ENDDO
-   10   ISUM=SUM(NPRNLS(1:NSTRAI))
-        IF (ISUM.NE.NPRNLI) THEN
-C  ROUND-OFF ERRORS
-          NMX=0
-          NPX=-1
-          DO ISTRAI=1,NSTRAI
-            IF (NPRNLS(ISTRAI).GT.NPX) THEN
-              NMX=ISTRAI
-              NPX=NPRNLS(ISTRAI)
-            ENDIF
-          ENDDO
-          IS=ISIGN(1,ISUM-NPRNLI)
-          NPRNLS(NMX)=NPRNLS(NMX)-IS
-          GOTO 10
-        ENDIF
         WRITE (iunout,*) 'TOTAL CENSUS NPRNLI ',NPRNLI
         CALL EIRENE_LEER(1)
         DO ISTRAI=1,NSTRAI
@@ -534,14 +521,6 @@ C
       call init_work_distribution(xtim,xx1,input_distribution_strategy)
       if (nmode > 0) call eirene_infcop_pre_strata
 
-      if (nprs > 1) then
-c nlident: jeder proc. von einer quelle istra bekommt gleichen seed gem. ninitl(istra).
-c         erzeugt bei zwei gleichen quellen (istra) identische ergebnisse.
-c not nlident: ninitl wird auf dem processor geaendert, add my_pe*10000
-
-CHJL/YM NLIDENT code was moved from here to within the threaded region
-        NPRNLS=NPRNLI
-      ENDIF
 C
 C**** INITIALIZE COMMONS COUTAU AND CSPEZ
 C
@@ -560,6 +539,18 @@ cdr  between the present and the previous cycle.
       FMSCL(:,0)=1.
       FISCL(:,0)=1.
       FPHSCL(:,0)=1.
+      IF(input_distribution_strategy==STRATEGY_SIMPLE) then
+        istrasort = 0
+        DO i = 1, NSTRAI
+          ISTRASORT(i) = i
+          NPTSSORT (i) = NPTS(i)
+        END DO
+        i = 0
+        ! Time census is first, don't sort
+        IF(NPRNLI/=0) i=1
+        call quicksort(ISTRASORT,NPTSSORT,1,NSTRAI-i)
+        write(iunout,*) 'Sorted strata:',nstrai,istrasort(1:nstrai)
+      ENDIF
 
 cdr feb 2020
       if (any(ninitl(1:nstrai) .lt. 0)) then
@@ -647,7 +638,7 @@ C  revert sequence of strata, so that census stratum is dealt with first
 c  to ensure: ALL particles from census are re-launched, one by one (not: by sampling)
           ISTRA=NSTRAI-ISTR+1
 cdr  now istr=1, istra=nstrai, is the stratum from old census
-          IF (ISTRA.EQ.NSTRAI-1) THEN
+          IF (ISTRA.EQ.NSTRAI) THEN
 cdr  something wrong here: this was originally stratum ISTR=2.
 C  TOTAL STORAGE STILL AVAILABLE ON NEW CENSUS
 C  AFTER ONE TO ONE RESTART FROM OLD CENSUS IS COMPLETED
@@ -669,6 +660,8 @@ C  REDEFINE NPTS ACCORDING TO XTIM(ISTRA)
         ELSE
           if (work_distribution_strategy == STRATEGY_IMPROVED) then
             istra = mapping(istr)
+          elseif (work_distribution_strategy == STRATEGY_SIMPLE) then
+            istra = istrasort(nstrai-istr+1)
           else
             istra = istr
           endif
@@ -1825,7 +1818,7 @@ C
 
 !     Update pressure feedback control loop:
       DO I=1, NLIMPS
-        CALL updatePressureFeedback(RPRESSFED(I))
+        !CALL updatePressureFeedback(RPRESSFED(I))
       END DO
 
 C
@@ -1909,7 +1902,7 @@ cdr  are bypassed.
         DEALLOCATE (OUTAU)
         IF (TRCFLE) WRITE (iunout,*) 'READ 11  IRC= ',IRC
       ENDIF
-
+      close(11+ifoff)
 C END SEQUENTIAL REGION
       ENDIF
 

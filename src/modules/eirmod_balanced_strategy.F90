@@ -29,7 +29,7 @@ module eirmod_balanced_strategy
   !> Init_balanced_strategy should be called first, afterwards in every
   !> iteration we optimize
   public init_balanced_strategy
-  public opt_balanced_strategy
+  public opt_balanced_strategy, simple_balanced_strategy
 
   public allocate_balanced_strategy, deallocate_balanced_strategy
 
@@ -323,6 +323,77 @@ module eirmod_balanced_strategy
              nparts_loc, nstrai, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
     ! procforstra is not used outside of cpes anymore, we could actually omit it
     CALL MPI_BCAST(PROCFORSTRA, SIZE(PROCFORSTRA), MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
+  end subroutine
+
+  subroutine simple_balanced_strategy(nparts_loc, npestr, stratum_leader)
+    use eirmod_mpi
+    ! Simple strategy consist of sharing large strata among all proc, while small
+    ! strata are reparted between the processes. This strategy needs that strata
+    ! are computed in order of decreasing number of histories in main steering routine
+    integer, intent(inout), dimension(:) :: nparts_loc
+    integer, intent(inout), dimension(:) :: npestr
+    integer, intent(inout), dimension(:) :: stratum_leader
+
+    integer, dimension(nstrai*nprs) :: nparts_loc_all
+    real(kind=dp), dimension(0:nprs) :: t_pe
+    integer, dimension(nstrai) :: npts_remaining
+    integer :: i, k, p, idx, n, ierr
+    real(kind=dp), dimension(nstrai*nprs) :: t_particles_all !< temporary variables
+    integer, dimension(nstrai*nprs) :: nparts_processed_all  !< for MPI communication
+
+    if (nprs == 1) return ! nothing to optimize for serial mode
+
+    if(my_pe==0) then
+      write(iunout,*) 'Simple allocation strategy'
+    endif
+
+    ! gather the processing time and particle numbers from other PEs
+    call MPI_Gather(t_particles_loc, nstrai, MPI_DOUBLE_PRECISION, &
+                        t_particles_all, nstrai, MPI_DOUBLE_PRECISION, &
+                        0, MPI_COMM_WORLD, ierr)
+    call MPI_Gather(n_particles_loc, nstrai, MPI_INTEGER, &
+                        nparts_processed_all, nstrai, MPI_INTEGER, &
+                        0, MPI_COMM_WORLD, ierr)
+
+    if (my_pe == 0) then
+      t_pe = 0 ! t_pe(i) is used as a cumulated weight to distribute the strata
+
+      ! Initialize output arrays
+      !> the number of particles that needs to be distributed:
+      npts_remaining = npts(1:nstrai)
+      npestr = 0         !< numbre of PEs per stratum
+      nparts_loc_all = 0
+
+      n = sum(npts(1:nstrai))
+      do k=1,nstrai
+        ! If strata is large, share among all procs
+        if (npts(k) > n/nprs/4) then
+          i = get_next_pe(t_pe)
+          stratum_leader(k) = i
+          t_pe(i) = t_pe(i) + npts(k)/nprs/4
+
+          do i = 0, nprs - 1
+          idx = i*nstrai + k
+          npestr(k) = npestr(k) + 1
+          call assign_work(real(npts(k),kind=dp)/nprs, t_pe(i), nparts_loc_all(idx), &
+                   1d0, npts_remaining(k), npts(k)/nprs/10)
+          enddo
+        else
+          i = get_next_pe(t_pe)
+          stratum_leader(k) = i
+          t_pe(i) = t_pe(i) + npts(k)/10
+          idx = i*nstrai + k
+          npestr(k) = 1
+          call assign_work(real(npts(k),kind=dp), t_pe(i), nparts_loc_all(idx), &
+                   1d0, npts_remaining(k), npts(k))
+        endif
+      end do
+    endif
+    ! Stratum_leader, npestr, nparts_loc are the main output
+    call mpi_bcast(stratum_leader, nstrai, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+    call mpi_bcast(npestr, size(npestr), MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+    call mpi_scatter(nparts_loc_all, nstrai, MPI_INTEGER,  &
+             nparts_loc, nstrai, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
   end subroutine
 
   subroutine assign_work(time, t_pe, nparts_loc, throughput, npts_remaining, &

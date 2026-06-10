@@ -70,6 +70,11 @@ CVKMPI CORRESPONDENCE TABLE "STRATA VERSUS PROCESSOR"
       !> evenly by using CPU time of previous steps.
       integer, public, parameter :: STRATEGY_IMPROVED = 4
 
+      !> EDGE2D strategy, for few bigs and many small strata,
+      !> all procs shares the bigs at begining, smalls are
+      !> distributed between procs
+      integer, public, parameter :: STRATEGY_SIMPLE = 5
+
       !> STRATEGY_DEFAULT and NPRLL_DEFAULT are set in user_defaults
       integer, public, save :: STRATEGY_DEFAULT
       integer, public, save :: NPRLL_DEFAULT
@@ -412,6 +417,11 @@ CVKMPI CORRESPONDENCE TABLE "STRATA VERSUS PROCESSOR"
                 endif
                 npesta = stratum_leader
               endif
+            case (STRATEGY_SIMPLE)
+              call init_balanced_strategy(ierr)
+              call simple_balanced_strategy(nparts_loc, npestr,
+     &                stratum_leader)
+              npesta = stratum_leader
             case default
               if (my_pe==0) then
                 write(iunout,*)

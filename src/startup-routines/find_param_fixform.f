@@ -93,7 +93,7 @@ C
      .           MOD_ADDV, NUM_COMPO,
      .           NUM_CONTRIB, ISP, ITP, IRATIO,
      .           I, J, K,
-     .           I2, I3, IH, IANF, IFILE,
+     .           I2, I3, IH, IANF, IFILE, ISTEP,
      .           ILINE, JCOMP, KCONTR, IREAC_ADD, IDUM1, IDUM2
       REAL(DP) :: SORIND, SORLIM, DUMM1, ROA, ZAA, ZZA, ZGA, YAA, YYA,
      .            ZIA, YP, XP, YIA, YGA,
@@ -905,12 +905,14 @@ cdr  number of substrata
         DO I=1,NSRFSI
           READ (IUNIN,6666) ID, INDIM
           READ (IUNIN,6664) DUMM1, SORLIM, SORIND
-          IF (INDIM == 4) NSTEP = MAX(NSTEP,NINT(SORIND))
+          ISTEP=MOD(NINT(SORIND),100)
+
+          IF (INDIM == 4) NSTEP = MAX(NSTEP,ISTEP)
           ISOR = NINT(SORLIM)
           DO WHILE (ISOR > 0)
 cdr  here NSTEP is set to the largest step function number specified on SORIND
             ID = MOD(ISOR,10)
-            IF ((ID == 4).OR.(ID==5)) NSTEP = MAX(NSTEP,NINT(SORIND))
+            IF ((ID == 4).OR.(ID==5)) NSTEP = MAX(NSTEP,ISTEP)
             ISOR = ISOR / 10
           END DO
           READ (IUNIN,*)

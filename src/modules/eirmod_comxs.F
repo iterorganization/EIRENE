@@ -1179,6 +1179,7 @@ cdr  (single code of atoms, molecules and test ions. tbd: photons)
       DEALLOCATE (IBGKPH)
 
       CALL EIRENE_FREE_REACDAT
+      DEALLOCATE (REACLINES)
 
       DEALLOCATE (M_HCOL)
 

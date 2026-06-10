@@ -435,9 +435,10 @@ C  COMPUTE SOME 'DERIVED' PLASMA DATA PROFILES FROM THE INPUT PROFILES
 C
 C  SET ELECTRON DENSITY FROM QUASI-NEUTRALITY, FURTHER: TEINL, DEINL, LGVAC(..,0:NPLS+1)
       LGVAC=.TRUE.
-      DEIN=0._DP
+      !DEIN=0._DP already initialised in plasma.f. Don't recompute if filled in prousr
 
       DO J=1,NSBOX
+        IF(DEIN(J)==0._DP) THEN
         DO JPLS=1,NPLSI
 cnh       28.10.2019
           IF(ZIIN(JPLS,J).NE.ZVAC) THEN
@@ -446,6 +447,7 @@ cnh       28.10.2019
             DEIN(J)=DEIN(J)+DBLE(NCHRGP(JPLS))*DIIN(JPLS,J)
           ENDIF
         END DO
+        ENDIF
 C  SET 'LOG OF TEMPERATURE AND DENSITY' ARRAYS
         ZTEI=MAX(TVAC,MIN(TEIN(J),1.E10_DP))
         TEINL(J)=LOG(ZTEI)
