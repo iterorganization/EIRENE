@@ -9,8 +9,8 @@ c     memory allocation for additional processors
       USE EIRMOD_PARMMOD
       USE EIRMOD_COMPRT
       USE EIRMOD_CPES
-      USE EIRMOD_BRAEIR
-      USE EIRMOD_EIRBRA
+      !USE EIRMOD_BRAEIR
+      !USE EIRMOD_EIRBRA
       USE EIRMOD_CLAST
       USE EIRMOD_CPLOT
       USE EIRMOD_CSPEI
