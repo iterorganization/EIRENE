@@ -14,6 +14,14 @@
 # Changelog of EIRENE repository:
 ---
 
+## R. Futtersack - feature/JINTRAC_userEDGE2D - a561ec0839c9af6dc3140e5099388d1a9881c9f3
+
+** Changes **
+
+- Take changes from SOLPS_develop
+- Update EDGE2D specific users files
+- to be merged to SOLPS_develop as base of JINTRAC_develop branch
+
 ## X. Bonnin - SOLPS_develop - bc2a2055bc9e2086dec38e452ccde59f31c62a4a
 
 ### Based on SOLPS_wide_grids - fed40a626b2730ec9a0fbf987833905f70237b8f
