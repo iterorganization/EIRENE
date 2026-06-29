@@ -610,10 +610,12 @@ else()
                       ARCHIVE_OUTPUT_DIRECTORY
                       ${PROJECT_BINARY_DIR}/../lib${CMAKE_BUILD_TYPE}
                       OUTPUT_NAME ${EIRENE_LIBRARY_NAME}${EIRENE_POSTFIX})
-  set_target_properties(eirene PROPERTIES
+  if ( NOT B25_EIRENE )
+    set_target_properties(eirene PROPERTIES
                       RUNTIME_OUTPUT_DIRECTORY
                       ${PROJECT_BINARY_DIR}/../bin${CMAKE_BUILD_TYPE}
                       OUTPUT_NAME ${EIRENE_EXECUTABLE_NAME}${EIRENE_POSTFIX})
+  endif()
 endif()
 
 # Adds optional local dependencies

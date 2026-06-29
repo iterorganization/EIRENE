@@ -151,11 +151,6 @@ C
       IF (MPI_INITIALIZE) THEN
         CALL EIRENE_MPI_INIT(IER)
       ENDIF
-#if ( defined(USE_EXT_OPENMP) && defined(USE_OPENMP) )
-      WRITE(*,*) 'Cannot run Eirene with both '//
-     .           'USE_EXT_OPENMP and USE_OPENMP simultaneously!'
-      CALL EIRENE_EXIT_OWN(1)
-#endif
 
 Cdmh  MOVED CPU TIME AFTER MPI_INIT BECAUSE MPI CPU-TIME ROUTINE IS USED
       TIMI=EIRENE_SECOND_OWN()
@@ -166,6 +161,12 @@ Cdmh  MOVED CPU TIME AFTER MPI_INIT BECAUSE MPI CPU-TIME ROUTINE IS USED
 
       CALL EIRENE_DEFAULTS_USR
       CALL EIRENE_ALLOC_CPES(2)
+
+#if ( defined(USE_EXT_OPENMP) && defined(USE_OPENMP) )
+      WRITE(*,*) 'Cannot run Eirene with both '//
+     .           'USE_EXT_OPENMP and USE_OPENMP simultaneously!'
+      CALL EIRENE_EXIT_OWN(1)
+#endif
 
 cdr  this is currently done in COMPRT. Should be moved to PARMMOD, or somewhere else early enough
 c     IUNIN = 1

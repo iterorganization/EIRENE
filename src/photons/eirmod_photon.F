@@ -292,7 +292,7 @@ cdr or, old version ??
             call EIRENE_voigtprof(iipl,icell,dnd,drft,gam)
             xx=(e0-(e00+drft))/dnd
             yy=gam*0.5_dp/dnd
-            fac = DBLE(EIRENE_PH_FADDEEVA(xx,yy,dnd))
+            fac = REAL(EIRENE_PH_FADDEEVA(xx,yy,dnd), DP)
          case(4)
 c  use wavelength scale
 c           call  EIRENE_lorvdwprof(icell,fwhm,shift,dvdw,.false.)
@@ -510,7 +510,7 @@ c           9:   lorentz+doppler, i.e., voigt
 ! voigt
           xx = (x-(e00d+drft))/dnd
           yy=gam*0.5_dp/dnd
-          val = DBLE(EIRENE_PH_FADDEEVA(xx,yy,dnd))
+          val = REAL(EIRENE_PH_FADDEEVA(xx,yy,dnd), DP)
 c
 c  next cases: perhaps from atoms point of view?
 c              all taken out.
@@ -765,7 +765,7 @@ c        val = EIRENE_lorentz(x,gam)
 ! voigt
 c        xx = (x-drft)/dnd
 c        yy=gam*0.5_dp/dnd
-c        val = DBLE(EIRENE_PH_FADDEEVA(xx,yy,dnd))
+c        val = REAL(EIRENE_PH_FADDEEVA(xx,yy,dnd), DP)
 
 
          x(-1)=omega-2.*omega_plus
@@ -793,7 +793,7 @@ c        val = DBLE(EIRENE_PH_FADDEEVA(xx,yy,dnd))
 ! voigt
           xx = (x(i)-drft)/dnd
           yy=gam*0.5_dp/dnd
-          val = DBLE(EIRENE_PH_FADDEEVA(xx,yy,dnd))
+          val = REAL(EIRENE_PH_FADDEEVA(xx,yy,dnd), DP)
           ssum=ssum+val*ci(i)
         enddo
         ssum1=0.
@@ -801,7 +801,7 @@ c        val = DBLE(EIRENE_PH_FADDEEVA(xx,yy,dnd))
 ! voigt
           xx = (x(i)-drft)/dnd
           yy=gam*0.5_dp/dnd
-          val = DBLE(EIRENE_PH_FADDEEVA(xx,yy,dnd))
+          val = REAL(EIRENE_PH_FADDEEVA(xx,yy,dnd), DP)
           ssum1=ssum1+val*ci(i)
         enddo
         ssum=ssum*(.5+.5*ctheta2)
@@ -1846,26 +1846,6 @@ cdr         =3 Rayleigh-Jeans limit E << kT
       cres=EIRENE_ph_humlik(x,y)/(dnd*sqrt(pia))
       return
       end function EIRENE_ph_faddeeva
-c
-      complex(dp) function EIRENE_ph_faddeeva2(x,y,icell,ipl)
-     .  result(cres)
-      implicit none
-      real(dp), intent(in) :: x,y
-      integer, intent(in) :: icell,ipl
-      real(dp) :: u,v
-      logical :: flag
-      external :: eirene_exit_own
-
-      call EIRENE_ph_wofz(x,y,u,v,flag)
-      if(flag) then
-         write(iunout,*) 'PHOTON MODULE EIRMOD_(PH_FADDEEVA2):'
-         write(iunout,*) '   flag=',flag
-         call EIRENE_exit_own(1)
-      endif
-! kind parameter added for better precision
-      cres=cmplx(u,v,dp)
-      return
-      end function EIRENE_ph_faddeeva2
 
       real(dp) function EIRENE_ph_lorvdw(dx,fwhm,shift,dvdw,
      .                            icell) result(res)
@@ -1897,16 +1877,39 @@ c  next: part with imag. fadeeva function
       z1  = cmplx(-a, -1._dp,dp) * aa
 !pb      zz  = cdsqrt(b*z1) *(0._dp,1._dp)
       zz  = sqrt(b*z1) *(0._dp,1._dp)
-      fad = EIRENE_ph_faddeeva2(dble(zz),aimag(zz),icell,0)
+      fad = EIRENE_ph_faddeeva2(zz%RE, zz%IM, icell, 0)
 
 !pb      sz1 = z1*cdsqrt(z1)
       sz1 = z1*sqrt(z1)
       z=sz1*fad
-      rvdw = AIMAG(z)*cpi
+      rvdw = real(AIMAG(z),DP)*cpi
 
       res=res+rvdw
 
       return
+
+      CONTAINS
+
+      complex(dp) function EIRENE_ph_faddeeva2(x,y,icell,ipl)
+     .  result(cres)
+      implicit none
+      real(dp), intent(in) :: x,y
+      integer, intent(in) :: icell,ipl
+      real(dp) :: u,v
+      logical :: flag
+      external :: eirene_exit_own
+
+      call EIRENE_ph_wofz(x,y,u,v,flag)
+      if(flag) then
+         write(iunout,*) 'PHOTON MODULE EIRMOD_(PH_FADDEEVA2):'
+         write(iunout,*) '   flag=',flag
+         call EIRENE_exit_own(1)
+      endif
+! kind parameter added for better precision
+      cres=cmplx(u,v,dp)
+      return
+      end function EIRENE_ph_faddeeva2
+
       end function EIRENE_ph_lorvdw
 
 c...............................................................................
@@ -2004,7 +2007,7 @@ c   build sampling distribution for sampling the component, given theta
       do ipol = -1,1
         ssum = ssum + strength(ipol)
         if(r0 <= ssum) then
-          del = dbz*dble(ipol)
+          del = dbz*real(ipol,DP)
           e00d = e00 + del
           select case(iprof)
           case(0)

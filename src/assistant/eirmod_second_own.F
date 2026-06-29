@@ -24,7 +24,7 @@ cdr returns wall clock time (in seconds) since the last call to function eirene_
       real(dp) :: EIRENE_second_own
       real(dp) :: time
 #ifdef USE_OPENMP
-#ifndef NAGFOR
+#ifdef NAGFOR
       double precision, external :: omp_get_wtime
 #endif
       time=real(omp_get_wtime(),DP)
@@ -44,7 +44,7 @@ cdr returns wall clock time (in seconds)
       implicit none
       real(dp) :: EIRENE_reset_second
 #ifdef USE_OPENMP
-#ifndef NAGFOR
+#ifdef NAGFOR
       double precision, external :: omp_get_wtime
 #endif
       start=real(omp_get_wtime(),DP)
