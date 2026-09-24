@@ -63,8 +63,27 @@ set(EIRENE_POSTFIX "" CACHE STRING "EIRENE output names postfix")
 # Check for modules and library for JSON
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # This is a bit convoluted but allows for some user error in the JSON library location
-# First check for user defined paths
-if(LibJSON)
+
+# Ask pkg-config first, unless the user has pointed at a specific installation
+if(NOT LibJSON AND NOT DEFINED ENV{JSONF_LIB_DIR})
+  find_package(PkgConfig)
+  if(PKG_CONFIG_FOUND)
+    pkg_check_modules(PC_JSONFORTRAN json-fortran)
+    if(PC_JSONFORTRAN_FOUND)
+      find_library(JSONFORTRAN_LIBRARY NAMES ${PC_JSONFORTRAN_LIBRARIES}
+        HINTS ${PC_JSONFORTRAN_LIBRARY_DIRS} NO_DEFAULT_PATH)
+    endif()
+  endif()
+endif()
+# If that fails check user defined paths
+if(PC_JSONFORTRAN_FOUND AND JSONFORTRAN_LIBRARY AND EXISTS "${PC_JSONFORTRAN_INCLUDE_DIRS}/json_module.mod")
+  message(STATUS " Found LibJSON with pkg-config. Version: " ${PC_JSONFORTRAN_VERSION})
+  set(LibJSON ${JSONFORTRAN_LIBRARY})
+  set(jsonfortran_INCLUDE_DIRS ${PC_JSONFORTRAN_INCLUDE_DIRS})
+  set(jsonfortran_FOUND TRUE)
+  message(STATUS " LibJSON: " ${LibJSON})
+# Then check for user defined paths
+elseif(LibJSON)
   message(STATUS " Searching for user defined LibJSON. Found " ${LibJSON} )
   if(IS_DIRECTORY ${LibJSON})
     if((EXISTS "${LibJSON}/libjsonfortran.a" OR EXISTS "${LibJSON}/libjsonfortran.so"))
@@ -78,7 +97,7 @@ if(LibJSON)
       set(LibJSON "${LibJSON}/libjsonfortran.a")
       set(jsonfortran_FOUND TRUE)
     else()
-      message(WARNING "JSON Library libjsonfortran.a NOT found at " ${LibJSON})
+      message(WARNING "JSON Library ljsonfortran NOT found at " ${LibJSON})
     endif()
   else()  # Assume the library is included in the path
     if(EXISTS ${LibJSON})
