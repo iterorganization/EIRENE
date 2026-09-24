@@ -103,6 +103,10 @@ cdr           It must be cleaned up and documented.
      .          EIRENE_EIRENE_REINIT
 
       integer, save :: inentry=1, init_log=0, init_open=0
+      logical, save :: worker_output_started=.false.
+#if ( defined(USE_OPENMP) || defined(USE_EXT_OPENMP) )
+!$OMP THREADPRIVATE(worker_output_started)
+#endif
       REAL(DP) :: DUMMY, TIMI
 
       CONTAINS
@@ -215,21 +219,26 @@ cdr  MPI: DEFINE OUTPUT STREAMS FOR OTHER PROCESSORS
             inquire(UNIT=IUNOUT,opened=op)
             if (op) then
               init_open = 1
+              worker_output_started = .true.
             else
-              IF ( LOUTAPP ) THEN
+              IF (LOUTAPP .OR. worker_output_started) THEN
                 OUTPOS='APPEND'
+                CALL EIRENE_OPENFILE (IUNOUT, FILE=OUTNAME,
+     .            ACCESS='SEQUENTIAL', FORM='FORMATTED',
+     .            POSITION=OUTPOS)
               ELSE
-                OUTPOS='ASIS'
+!  A fresh program execution starts a new worker log.  Later coupled
+!  evaluations must append or earlier output.00xx records are lost.
+                CALL EIRENE_OPENFILE (IUNOUT, FILE=OUTNAME,
+     .            ACCESS='SEQUENTIAL', FORM='FORMATTED',
+     .            STATUS='REPLACE')
               END IF
-              CALL EIRENE_OPENFILE (IUNOUT, FILE=OUTNAME,
-     .          ACCESS='SEQUENTIAL', FORM='FORMATTED', POSITION=OUTPOS)
+              worker_output_started = .true.
             end if
             call ioflush_usr
             init_open=1
           END IF
 
-        else
-          if (my_pe.ne.0 .and. .not.LOUTAPP) rewind (iunout)
         end if
 
         write (iunout,*) 'NPRS, EIRENE_NTHREADS ', NPRS, EIRENE_NTHREADS

@@ -25,14 +25,16 @@ C
 
         OUTNAME='output.'
         WRITE (OUTNAME(8:),'(I4.4)') MY_PE
-        IF ( LOUTAPP ) THEN
+        IF (LOUTAPP) THEN
           OUTPOS='APPEND'
+          CALL EIRENE_OPENFILE (IUNOUT, FILE=OUTNAME,
+     .          ACCESS='SEQUENTIAL', FORM='FORMATTED', POSITION=OUTPOS)
         ELSE
-          OUTPOS='ASIS'
+!  A normal program execution starts with a fresh worker output file.
+          CALL EIRENE_OPENFILE (IUNOUT, FILE=OUTNAME,
+     .          ACCESS='SEQUENTIAL', FORM='FORMATTED', STATUS='REPLACE')
         END IF
 
-        CALL EIRENE_OPENFILE (IUNOUT, FILE=OUTNAME,
-     .        ACCESS='SEQUENTIAL', FORM='FORMATTED', POSITION=OUTPOS)
         call ioflush_usr
 
       end if
