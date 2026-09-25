@@ -214,46 +214,41 @@ C
 
       CALL EIRENE_INIT_CINIT
 
-cdr scan for optional CFILE lines: path to external database files
-cdr Parse input card for PATH = DBFNAME
-      READ (IUNIN,'(A420)') ZEILE    !dr  probably out
-      DO WHILE (ZEILE(1:1) .NE. '*') !dr  probably out
-cdr  I think this outer loop is unnecessary. Identical code in input.f, without it.
-        READ (IUNIN,'(A420)') ZEILE
-        IREAD=1
-        I1 = INDEX(ZEILE,'CFILE')
-        DO WHILE (I1 /= 0)
-          I2 = VERIFY(ZEILE(I1+5:),' ') + I1 + 4
-          I3 = SCAN(ZEILE(I2+1:),' ')
-          IH = MIN(I3,6)
-          HANDLE=REPEAT(' ',6)
-          HANDLE(1:IH) = ZEILE(I2:I2+IH-1)
+C  Scan optional CFILE cards containing external database paths.
+C  Parse the current card before advancing to avoid skipping the first.
+      READ (IUNIN,'(A420)') ZEILE
+      IREAD=1
+      I1 = INDEX(ZEILE,'CFILE')
+      DO WHILE (I1 /= 0)
+        I2 = VERIFY(ZEILE(I1+5:),' ') + I1 + 4
+        I3 = SCAN(ZEILE(I2+1:),' ')
+        IH = MIN(I3,6)
+        HANDLE=REPEAT(' ',6)
+        HANDLE(1:IH) = ZEILE(I2:I2+IH-1)
 c   cfile card found. Is this one of the permitted external files?
-          DO IFILE = 1,NDBNAMES
-            IF (INDEX(DBHANDLE(IFILE),HANDLE) /= 0) EXIT
-          END DO
-          IF (IFILE <= NDBNAMES) THEN
+        DO IFILE = 1,NDBNAMES
+          IF (INDEX(DBHANDLE(IFILE),HANDLE) /= 0) EXIT
+        END DO
+        IF (IFILE <= NDBNAMES) THEN
 c   yes, file type no 'ifile' as stored on dbhandle, in eirmod_cinit.
 c   currently: 16 types of files are recognized
-            IANF = I2+I3+VERIFY(ZEILE(I2+I3:),' ')-1
-            IEND = IANF+SCAN(ZEILE(IANF+1:),' ')-1
+          IANF = I2+I3+VERIFY(ZEILE(I2+I3:),' ')-1
+          IEND = IANF+SCAN(ZEILE(IANF+1:),' ')-1
 
-            DBFNAME(IFILE)(1:IEND-IANF+1) = ZEILE(IANF:IEND)
-            DBFNAME_IN(IFILE) = DBFNAME(IFILE)
-            CALL EIRENE_FILEPATH_USR(ZEILE,DBFNAME(IFILE),IANF,IEND)
+          DBFNAME(IFILE)(1:IEND-IANF+1) = ZEILE(IANF:IEND)
+          DBFNAME_IN(IFILE) = DBFNAME(IFILE)
+          CALL EIRENE_FILEPATH_USR(ZEILE,DBFNAME(IFILE),IANF,IEND)
 
-            WRITE (IUNOUT,*) 'PATH SET FOR FILE ',TRIM(HANDLE)
-            WRITE (IUNOUT,*) 'PATH = ',ZEILE(IANF:IEND)
-          ELSE
-            WRITE (IUNOUT,*) ' WRONG NAME FOR DATABASE ENTERED'
-            WRITE (IUNOUT,*) ' DATABASE DEFINITION FOR ',TRIM(HANDLE),
+          WRITE (IUNOUT,*) 'PATH SET FOR FILE ',TRIM(HANDLE)
+          WRITE (IUNOUT,*) 'PATH = ',ZEILE(IANF:IEND)
+        ELSE
+          WRITE (IUNOUT,*) ' WRONG NAME FOR DATABASE ENTERED'
+          WRITE (IUNOUT,*) ' DATABASE DEFINITION FOR ',TRIM(HANDLE),
      .                       ' IGNORED'
-          END IF
-          READ (IUNIN,'(A420)') ZEILE
-          I1 = INDEX(ZEILE,'CFILE')
-        END DO
-
-      END DO  !dr  unnecessary outer loop: probably out
+        END IF
+        READ (IUNIN,'(A420)') ZEILE
+        I1 = INDEX(ZEILE,'CFILE')
+      END DO
 C
 C
 C  READ DATA FOR STANDARD MESH, 200---299
