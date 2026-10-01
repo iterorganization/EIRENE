@@ -43,7 +43,7 @@ c  EIRENE_PLMESH: plots these contours, using GR plot software.
       INTEGER  :: ICONT, IPOIN, IWST, IWEN, IWL, IWP,
      .            IWAN, IMN, I, NCONT, J, IUHR, ISTORE, IP, IH, IFOUND,
      .            ICO, IPO, IN, IS, IS1, ITRI, INBT, INBS
-      LOGICAL  :: LFOUND
+      LOGICAL  :: LFOUND, FORT78EXISTS
       LOGICAL, ALLOCATABLE :: FOUND(:,:)
       EXTERNAL :: EIRENE_LEER
 
@@ -79,6 +79,13 @@ C ILPLG WIRD IM INPUT BLOCK 3 EINGELESEN
         call EIRENE_leer(2)
         return
       endif
+      fort78exists = .false.
+      inquire(file='fort.78', exist=fort78exists)
+      if (fort78exists) then 
+        write(iunout, *) 'EIRENE_WRMESH: fort.78 file already ' // 
+     .   'exists, exiting...'
+        return 
+      end if 
 
       IF (.NOT.ALLOCATED(NCONPOINT)) THEN
         ALLOCATE (NCONPOINT(NCONT))
