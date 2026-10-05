@@ -277,15 +277,16 @@ C
      I           ICOADD, ICOG, IDUMMY, IERROR,
      I           ITRI, NBAR, NBARSI, ICOFC, IC,
      I           IFC1, IFC2, IFC3, ICC,
-     I           IUNIN_SAVE
+     I           IUNIN_SAVE, ID3b, ID3bc
 #ifndef NO_JSON
       INTEGER :: JS
 #endif
       REAL(DP) :: TX, TY, VS, VT,
-     R            VSX, VSY, VTX, VTY, VPRO
+     R            VSX, VSY, VTX, VTY, VPRO, tx1, ty1, tx2, ty2
       INTEGER, ALLOCATABLE :: JDUMMY(:)
 C
       CHARACTER(72) :: ZEILE
+      character(100) :: ioerrmsg
       LOGICAL :: L1, L2, FOUND, IFBOUND
       EXTERNAL :: EIRENE_HEADNG, EIRENE_LEER, EIRENE_EXIT_OWN,
      .            EIRENE_GEOMD, EIRENE_GEOUSR,
@@ -586,6 +587,57 @@ C  (INPUT BLOCK 15, B2.5-CODE SPECIFIC)
 C
 
       CALL EIRENE_GEOUSR
+
+      ! Do further adjustments based on fort.36 file to deal with 
+      ! precision effects of 3b surfaces due to void polygon 
+      ! vertex coordinate precision
+      open(unit=36, file='fort.36', status='old', action='read', 
+     .    iostat=io, iomsg=ioerrmsg)
+      if (io == 0) then 
+        write(iunout, *) 'EIRENE_IF0COP: Found fort.36 file, reading...'
+        ! File found, read
+        ID3bc = 0
+        do while (.true.)
+          ! Read the next line
+          read(36, '(72a)', iostat=io, iomsg=ioerrmsg) ZEILE 
+          if (io /= 0) then 
+            print *, 'iostat: ', io
+            print *, 'ioerrmsg:', ioerrmsg
+            print *, ZEILE 
+            exit 
+          end if 
+          backspace(36)
+          read(36, *, iostat=io) ID3b, tx1, ty1, tx2, ty2 
+
+          ! Check if read was successful
+          if (io /= 0) then 
+            write(iunout, *) 'EIRENE_IF0COP: stopped reading after '
+            write(iunout, *) ID3bc, 'surfaces read'
+            write(iunout, *) 'io status: ', io
+            write(iunout, *) 'io msg: ', ioerrmsg
+            exit 
+          end if 
+
+          ! Change this surface
+          write(iunout, *) 'EIRENE_IF0COP: modifying 3b surface ', ID3b 
+          write(iunout, *) 'before (x1, y1, x2, y2): ', p1(1, ID3b), 
+     .      p1(2, ID3b), p2(1, ID3b), p2(2, ID3b)
+
+          p1(1, ID3b) = tx1 
+          p1(2, ID3b) = ty1 
+          p2(1, ID3b) = tx2 
+          p2(2, ID3b) = ty2
+
+          write(iunout, *) 'after (x1, y1, x2, y2)', p1(1, ID3b), 
+     .      p1(2, ID3b), p2(1, ID3b), p2(2, ID3b)
+        end do 
+      else
+        ! File not found, skip
+        write(iunout, *) 'EIRENE_IF0COP: Could not open fort.36 file' //
+     .   ', continuing without mapping void polygon vertices...'
+        write(iunout, *) 'iomsg: ', ioerrmsg
+      end if 
+      close(unit=36)
 
 C
 C  DETERMINE THE ARRAY INMTI FOR ALL ADDITIONAL SURFACES
