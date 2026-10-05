@@ -235,7 +235,8 @@ c======================================================================
       IMPLICIT NONE
 
       logical :: first, normalcase, hlp_found
-      integer :: onetwo(8),limpos(8),xpolpos(8),ypolpos(8),icoor(8)
+      integer, allocatable, dimension(:) :: onetwo,limpos,xpolpos,
+     .  ypolpos,icoor
 !      character(80) :: geometry_comment
       REAL(DP), PARAMETER :: hlp_tol=0.001
 
@@ -259,6 +260,9 @@ c
         READ (IUNIN,'(2I6)') NADMOD,NASMOD
         WRITE(iunout,*) "GEOUSR: NADMOD,NASMOD",NADMOD,NASMOD
         IF (NLPLG) THEN
+          ! Allocate
+          allocate(onetwo(8), limpos(8), xpolpos(8), ypolpos(8))
+          allocate(icoor(8))
           N=max(npplg/3,1)*4
           do i=1,8
             onetwo(i)=0
@@ -306,6 +310,8 @@ C BOTTOM OUTER (RIGHT) TARGET
           end if
         ELSE IF (NLFEM) THEN
           N=NASMOD
+          allocate(limpos(N), onetwo(N), xpolpos(N), ypolpos(N))
+          allocate(icoor(N))
         END IF
 
 csw 03sep2013
@@ -359,6 +365,7 @@ C
 csw
         normalcase=.true.
 csw 03sep2013        do i=1,max(npplg/3,1)*4
+        icoor = 0 
         do i=1,NASMOD
 
 cdr either read onetwo, limpos
