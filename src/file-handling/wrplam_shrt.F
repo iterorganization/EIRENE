@@ -474,7 +474,11 @@ c         irel=nfla_ir(irea)
 cdr  case 6,7: to be done
         end select
       ENDDO
-
+c
+      IF (ALLOCATED(RTAB)) THEN
+        DEALLOCATE (RTAB)
+        DEALLOCATE (ETAB)
+      END IF
       CLOSE (UNIT=13+ifoff)
       RETURN
 
