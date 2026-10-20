@@ -14,6 +14,40 @@
 # Changelog of EIRENE repository:
 ---
 
+## R. Futtersack - feature/JINTRAC_userEDGE2D - a561ec0839c9af6dc3140e5099388d1a9881c9f3
+
+** Changes **
+
+- Take changes from SOLPS_develop
+- Update EDGE2D specific users files
+- to be merged to SOLPS_develop as base of JINTRAC_develop branch
+
+## X. Bonnin - SOLPS_develop - bc2a2055bc9e2086dec38e452ccde59f31c62a4a
+
+### Based on SOLPS_wide_grids - fed40a626b2730ec9a0fbf987833905f70237b8f
+
+** Changes **
+
+- Fixed X11 library location in PITAGORA host configuration files (with contribution from E. Tonello)
+- Pre-evaluated pkg-config statements to reduce compilation time
+- Cleaned up CMake configuration files
+- Fixed bug preventing correct compilation in debug mode
+- Made CMake build self-contained; improved compiler detection logic (ifx vs. ifort fallback)
+- Compile b2mod_dimensions.F as part of EIRENE library to ensure module availability (with contribution from S. Pinches)
+- Added IntelLLVM compiler and JSON-Fortran CMake package detection; added safeties for mis-specified graphical library paths
+- Added error message for OpenMP incompatibility with ifx compiler; made error non-fatal to allow 2025b toolchain builds to proceed
+- Fixed parallel-build race condition: generate version.f into build directory instead of source tree (with contribution from S. Pinches)
+- Increased minimum CMake version requirement to 3.10; removed CMake deprecation warnings
+- Corrected LaTeX syntax error in Manual
+- Fixed fort.44 wall-loading output title field sizes (with contribution from J. Lore)
+- Added JINTRAC coupling interface to the SOLPS-ITER/Eirene integration (with contribution from R. Futtersack)
+- Fixed W-0279 "Cannot inline - data type mismatch" compiler warnings with NVHPC 24.1: replaced AIMAG() intrinsic calls with Fortran 2003 %IM component selectors for complex variables in eirmod_photon.F
+- Eliminated remaining NVHPC 24.1 inliner warnings by moving EIRENE_ph_faddeeva2 from module-level to internal procedure of EIRENE_ph_lorvdw
+
+No CI cases updated.
+
+---
+
 ## X. Bonnin - SOLPS_wide_grids
 
 ### Based on SOLPS_event_limit - 99e131dfef3a448d0ccb512459f1a55bf211c6fd

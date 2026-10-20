@@ -1,5 +1,5 @@
 # Test whether necessary variables are set
-LD_NAG ?= `pkg-config openblas --libs`
+LD_NAG ?= $(shell pkg-config openblas --libs)
 LD_GR  ?= -L${EBROOTGR}/lib -lgr
 LD_GKS ?= -L${GKSDIR}/lib -lGKS -lgfortran -lX11 -lXt
 GLI_HOME ?= ${EBROOTGLI}
@@ -18,4 +18,3 @@ LDLIBS    = -L/usr/local/lib
 #!!!Local Variables:
 #!!! mode: Makefile
 #!!! End:
-

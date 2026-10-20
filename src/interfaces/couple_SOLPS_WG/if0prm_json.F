@@ -55,6 +55,7 @@ C  READ INPUT BLOCK 14
 
       IF(.NOT.ALLOCATED(LKINDP)) ALLOCATE(LKINDP(NPLS))
       LKINDP=0
+      COMUSR_FIRST_PASS(5) = .FALSE.
       call json%get_child(p,'B2FLUIDS',pflds)
       DO IPL=1,NPLS
         call json%get_child(pflds,ipl,pfld)

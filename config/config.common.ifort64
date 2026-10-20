@@ -1,28 +1,33 @@
 ifeq (${FC},f77)
-FC = ifort
+  FC = ifort
 endif
 ifeq (${CC},cc)
-ifneq (${FC},ftn)
-CC = /usr/bin/gcc
+  ifneq (${FC},ftn)
+    CC = /usr/bin/gcc
+  endif
 endif
-endif
-# Use of ifx OpenMP is unsafe at the moment
+# Use of ifx OpenMP is unsafe at the moment, but only swap if a usable ifort
+# is present (intel-compilers 2025.x onwards ships only ifx).
 ifneq (,$(findstring ifx,${FC}))
   ifdef SOLPS_OPENMP
-    FN = ifort
-    MPI_FC = mpiifort
-    ifdef SOLPS_MPI
-      FC = ${MPI_FC}
+    ifneq ($(shell command -v ifort 2>/dev/null),)
+      FN = ifort
+      MPI_FC = mpiifort
+      ifdef SOLPS_MPI
+        FC = ${MPI_FC}
+      else
+        FC = ifort
+      endif
     else
-      FC = ifort
+      $(error Intel compiler ifx is incompatible with OpenMP usage!)
     endif
   endif
 endif
 
 # Build with JSON if present
 ifeq ($(shell `pkg-config --exists json-fortran`; echo $$?),0)
-  JSON_INC ?= `pkg-config json-fortran --cflags`
-  LD_JSON ?= `pkg-config json-fortran --libs`
+  JSON_INC ?= $(shell pkg-config json-fortran --cflags)
+  LD_JSON ?= $(shell pkg-config json-fortran --libs)
 else
   ifndef SOLPS_CPP
     DEFINES += -DNO_JSON
@@ -44,12 +49,17 @@ ifndef COMPILER_REDEF
   CFLAGS += -g
  endif
  ifdef SOLPS_OPENMP
-  ifeq ($(shell test ${COMPILER_MAJOR_VERSION} -ge 15; echo $$?),0)
-   FCOPTS += -qopenmp
-   LDOPTS += -qopenmp
+  ifeq ($(shell test ${COMPILER_MAJOR_VERSION} -ge 2023; echo $$?),0)
+   FPOPTS += -fiopenmp
+   LPOPTS += -fiopenmp
   else
-   FCOPTS += -openmp
-   LDOPTS += -openmp
+   ifeq ($(shell test ${COMPILER_MAJOR_VERSION} -ge 15; echo $$?),0)
+    FCOPTS += -qopenmp -qopenmp-threadprivate=compat
+    LDOPTS += -qopenmp
+   else
+    FCOPTS += -openmp
+    LDOPTS += -openmp
+   endif
   endif
  endif
  ifdef SOLPS_DEBUG
@@ -58,6 +68,11 @@ ifndef COMPILER_REDEF
    FCOPTS += -check nouninit
    COPTS  += -Rno-debug-disables-optimization
   endif
+ endif
+ ifeq ($(shell test ${COMPILER_MAJOR_VERSION} -ge 2023; echo $$?),0)
+  FCOPTS += -mprefer-vector-width=512
+ else
+  FCOPTS += -qopt-zmm-usage=high
  endif
  ifeq ($(shell test ${COMPILER_MAJOR_VERSION} -ge 15; echo $$?),0)
   FCOPTS += -fp-model=precise
@@ -92,4 +107,3 @@ MOD      = mod
 #!!!Local Variables:
 #!!! mode: Makefile
 #!!! End:
-

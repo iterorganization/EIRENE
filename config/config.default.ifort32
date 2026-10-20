@@ -7,8 +7,8 @@ endif
 
 # Build with JSON if present
 ifeq ($(shell `pkg-config --exists json-fortran`; echo $$?),0)
-  JSON_INC ?= `pkg-config json-fortran --cflags`
-  LD_JSON ?= `pkg-config json-fortran --libs`
+  JSON_INC ?= $(shell pkg-config json-fortran --cflags)
+  LD_JSON ?= $(shell pkg-config json-fortran --libs)
 endif
 
 ifdef SOLPS_MPI
@@ -53,4 +53,3 @@ COMPILE  = ${FC} -c ${FFLAGS} ${INCMOD}${OBJDIR}
 #!!!Local Variables:
 #!!! mode: Makefile
 #!!! End:
-

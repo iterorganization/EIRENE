@@ -8,102 +8,55 @@ C
       USE EIRMOD_CADGEO
       USE EIRMOD_COMPRT
       USE EIRMOD_CTRCEI
+      USE EIRMOD_CTRIG
       USE EIRMOD_CCONA
       USE EIRMOD_CGEOM
       USE EIRMOD_CGRID
       USE EIRMOD_CLGIN
       USE EIRMOD_CINIT
       USE EIRMOD_CPOLYG
+      USE EIRMOD_USRDATA
       IMPLICIT NONE
       CHARACTER(80) :: ZEILE
       REAL(DP) :: XCOOR, YCOOR, ZCOOR, xan, xen, yan, yen, zan, zen
-      INTEGER :: NADMOD, NASMOD, NORMOD, NRS, IPUNKT, I,NSSIR, NSSIP,
+      INTEGER :: NADMOD, NASMOD, NORMOD, NRS, IPUNKT, NSSIR, NSSIP,
      .           IDIR, IR, IP, IT, IC, IN, NAS
       logical :: lx1,lx2,lx3,lx4,ly1,ly2,ly3,ly4
+      integer :: ists, i, j, is
 C
 C MODIFY GEOMETRY
 C
 C
 cswx 24sep07
+      ! coarse mesh
+      do j=1,nrpla
+        ncltal(j) = int(real(j-1)/icoarselev)+1
+      enddo
+      nsbox_tal = int(nrpla/icoarselev)
+      do j=1,nr1st-nrpla
+        ncltal(nrpla+j)=nsbox_tal+j
+      enddo
+      write(iunout,('(a,10i8)')),'geousr : coarse mesh',
+     &                          nsbox,nsbox_tal,nrpla,nrad,nr1st
+      nsbox_tal = nsbox_tal + nr1st - nrpla
+      nr1tal    = nsbox_tal
+
+!rf   fix INMTI and INMTINSS as should be done in grid.f
+!     needed for diagnostic surfaces
+      do ists = 1, nlimps
+        if(iliin(ists)==0) cycle
+        do j= 1, surf_trian(ists)%numtr
+          i = surf_trian(ists)%itrias(j)
+          is = surf_trian(ists)%itrisi(j)
+          if (nchbar(is,i) > 0) then
+            ! surface is seen by neighbor
+            inmti(   nseite(is,i),nchbar(is,i)) = inmti(is,i)
+            inmtinss(nseite(is,i),nchbar(is,i)) = -1
+          end if
+        end do
+      end do
+
       return
-cswx
-      READ (IUNIN,'(A80)') ZEILE
-      READ (IUNIN,'(3I6)') NADMOD,NASMOD,NORMOD
-
-      DO I=1,NADMOD
-        READ (IUNIN,'(2I6,3E12.4)') NRS,IPUNKT,XCOOR,YCOOR,ZCOOR
-
-        SELECT CASE(IPUNKT)
-
-        CASE DEFAULT
-           WRITE (iunout,*) 'WRONG POINT NUMBER IN ADDUSR'
-           WRITE (iunout,*) 'INPUT LINE READING'
-           WRITE (iunout,'(2I6,1P,3E12.4)') NRS,IPUNKT,XCOOR,YCOOR,ZCOOR
-           WRITE (iunout,*) 'IS IGNORED'
-
-        CASE (1)
-           P1(1,NRS)=XCOOR
-           P1(2,NRS)=YCOOR
-           P1(3,NRS)=ZCOOR
-
-        CASE (2)
-           P2(1,NRS)=XCOOR
-           P2(2,NRS)=YCOOR
-           P2(3,NRS)=ZCOOR
-
-        CASE (3)
-           P3(1,NRS)=XCOOR
-           P3(2,NRS)=YCOOR
-           P3(3,NRS)=ZCOOR
-
-        CASE (4)
-           P4(1,NRS)=XCOOR
-           P4(2,NRS)=YCOOR
-           P4(3,NRS)=ZCOOR
-
-        CASE (5)
-           P5(1,NRS)=XCOOR
-           P5(2,NRS)=YCOOR
-           P5(3,NRS)=ZCOOR
-
-        CASE (6)
-           P6(1,NRS)=XCOOR
-           P6(2,NRS)=YCOOR
-           P6(3,NRS)=ZCOOR
-
-        END SELECT
-      ENDDO
-
-      DO I=1,NASMOD
-        READ (IUNIN,'(5I6)') NAS,IPUNKT,NSSIR,NSSIP
-        IF (IPUNKT.EQ.1) THEN
-          P1(1,NAS)=XPOL(NSSIR,NSSIP)
-          P1(2,NAS)=YPOL(NSSIR,NSSIP)
-        ELSEIF (IPUNKT.EQ.2) THEN
-          P2(1,NAS)=XPOL(NSSIR,NSSIP)
-          P2(2,NAS)=YPOL(NSSIR,NSSIP)
-        ELSE
-          WRITE (iunout,*) 'WRONG POINT NUMBER IN ADDUSR'
-          WRITE (iunout,*) 'INPUT LINE READING'
-          WRITE (iunout,'(5I6)') NAS,IPUNKT,NSSIR,NSSIP
-          WRITE (iunout,*) 'IS IGNORED'
-        ENDIF
-      ENDDO
-
-      DO I = 1, NORMOD
-        READ (IUNIN,'(5I6)') IDIR,IR,IP
-        IF (IDIR == 1) THEN
-          PLNX(IR,IP) = -PLNX(IR,IP)
-          PLNY(IR,IP) = -PLNY(IR,IP)
-        ELSE IF (IDIR == 2) THEN
-          PPLNX(IR,IP) = -PPLNX(IR,IP)
-          PPLNY(IR,IP) = -PPLNY(IR,IP)
-        ELSE
-          WRITE (iunout,*) ' IDIR = ',IDIR,' NOT FORESEEN IN GEOUSR'
-          WRITE (iunout,*) IDIR,IR,IP
-          WRITE (iunout,*) ' IS IGNORED'
-        END IF
-      END DO
 C
 C
 C  ABSCHALTEN NICHT ERREICHBARER ODER DOPPELT VORHANDENER FLAECHEN
@@ -122,17 +75,6 @@ C   DEFAULTS: LGJUM1(J,J)=.TRUE. FUER EBENE FLAECHEN,
 C             LGJUM2(J,J)=.TRUE. FUER FLAECHEN ZWEITER ORDNUNG
 C
 C
-C
-C  SET SOME VOLUMES EXPLICITLY
-C
-C
-C  MODIFY REFLECTION MODEL AT TARGET PLATES
-C
-C     do i=1,nlimps
-C       do isp=1,natmi+nmoli+nioni
-C         recyct(isp,i)=1.
-C       enddo
-C     enddo
 
       RETURN
       END SUBROUTINE EIRENE_GEOUSR

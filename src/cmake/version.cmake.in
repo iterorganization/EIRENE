@@ -30,6 +30,8 @@ endif()
 # execute_process(COMMAND ${GIT_EXECUTABLE} ${git_ignore_command}
 #                 WORKING_DIRECTORY @PROJECT_SOURCE_DIR@/..)
 
-# Configures the version output.
+# Configures the version output into this build's binary directory
+# (EIRENE_VERSION_F), not the shared source tree, so that concurrent standalone
+# and coupled builds do not race writing a single assistant/version.f.
 configure_file(@PROJECT_SOURCE_DIR@/cmake/version.f.in
-               @PROJECT_SOURCE_DIR@/assistant/version.f)
+               @EIRENE_VERSION_F@)

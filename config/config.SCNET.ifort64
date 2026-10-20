@@ -1,0 +1,53 @@
+# Test whether necessary variables are set
+ifndef LD_NAG
+  $(error LD_NAG not defined)
+endif
+
+# DEFINES += -DRECL_UNITS_PER_DOUBLE=8 -DNO_F01AAF -DNO_SAVE
+
+DEFINES += -DNO_JSON
+
+CPP     = -/lib/cpp -traditional
+
+MPI_FC ?= mpiifort
+ifdef SOLPS_MPI
+ FC     = ${MPI_FC}
+else
+ ifdef USE_IMPGYRO
+  FC    = ${MPI_FC}
+ endif
+endif
+
+FCOPTS  = -fPIC -assume no2underscore
+ifdef SOLPS_DEBUG
+FCOPTS += -warn interfaces -fpe0
+else
+ifdef SOLPS_MPI
+FCOPTS += -O2
+CFLAGS += -O2 ${MPI_CPP}
+else
+ifdef USE_IMPGYRO
+FCOPTS += -O2
+CFLAGS += -O2 ${MPI_CPP}
+else
+FCOPTS += -O3
+CFLAGS += -O3
+endif
+endif
+endif
+
+ifdef LD_GR
+ifdef LD_GKS
+ifdef GLI_HOME
+GKS     = ${LD_GR} ${LD_GKS} -lX11 -lXt
+endif
+endif
+endif
+
+LDLIBS  = -L/usr/local/lib -L/usr/X11R6/lib64
+
+
+#!!!Local Variables:
+#!!! mode: Makefile
+#!!! End:
+

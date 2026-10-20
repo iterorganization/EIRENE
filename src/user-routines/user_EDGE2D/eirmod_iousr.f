@@ -8,7 +8,8 @@ C  User specific read routines
 
       private
 
-      public :: eirene_read_block_11_usr, eirene_write_block_11_usr
+      public :: eirene_read_block_11_usr, eirene_write_block_11_usr,
+     .          eirene_read_block_11_usr_fixed
 
       interface eirene_read_block_11_usr
         procedure :: eirene_read_block_11_usr_fixed
@@ -27,8 +28,7 @@ C  User specific read routines
 
       subroutine eirene_read_block_11_usr_fixed
 
-      use eirmod_comprt
-     , , only: iunin, iunout
+      use eirmod_comprt, only: iunin, iunout
 
       implicit none
       integer :: j, idumm(9)
@@ -40,15 +40,9 @@ C  User specific read routines
       subroutine eirene_read_block_11_usr_json(json, me)
 
       use eirmod_json
-      use json_module           !IGNORE
-!pb  .    , lk => json_lk, rk => json_rk, ik => json_ik, ck => json_ck
 
-      class(json_core) :: json
-      type(json_value),pointer :: me
-      type(json_value),pointer :: pcrits, pcrit
-      integer :: nsf
-      integer, allocatable :: idum(:)
-      logical :: found, foundc
+      integer :: json
+      integer :: me
 
       return
       end subroutine eirene_read_block_11_usr_json
@@ -57,12 +51,9 @@ C  User specific read routines
       subroutine eirene_write_block_11_usr_json(json, me)
 
       use eirmod_json
-      use json_module           !IGNORE
-     .    , lk => json_lk, rk => json_rk, ik => json_ik, ck => json_ck
 
-      class(json_core) :: json
-      type(json_value),pointer :: me
-      type(json_value),pointer :: pcrits, pcrit
+      integer :: json
+      integer :: me
 
       return
       end subroutine eirene_write_block_11_usr_json
@@ -73,4 +64,5 @@ C  User specific read routines
 #endif
 
       end module eirmod_iousr
+
 

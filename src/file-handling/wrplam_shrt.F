@@ -411,13 +411,9 @@ cdr  next: read the NFLA_VIRT collisional process data related to these virtual 
 #ifndef LEGACYCOMP
         ALLOCATE (TAB_STORE(NREA_VIRT,NRAD,9), SOURCE=0._DP)
         ALLOCATE (E_STORE(NREA_VIRT,NRAD,9), SOURCE=0._DP)
-        ALLOCATE (RTAB(NRAD,9))
-        ALLOCATE (ETAB(NRAD,9))
 #else
         ALLOCATE (TAB_STORE(NREA_VIRT,NRAD,9))
         ALLOCATE (E_STORE(NREA_VIRT,NRAD,9))
-        ALLOCATE (RTAB(NRAD,9))
-        ALLOCATE (ETAB(NRAD,9))
         TAB_STORE = 0._DP
         E_STORE = 0._DP
 #endif
@@ -430,6 +426,11 @@ cdr  next: read the NFLA_VIRT collisional process data related to these virtual 
         ALLOCATE (LG_STORE(NRAD,NFLA_VIRT))
         LG_STORE = .FALSE.
 #endif
+      END IF
+
+      IF (.NOT.ALLOCATED(RTAB)) THEN
+        ALLOCATE (RTAB(NRAD,9))
+        ALLOCATE (ETAB(NRAD,9))
       END IF
 
       READ (13+IFOFF) NFLA_IPLS(1:NFLA_VIRT), NFLA_ISWR(1:NREA_VIRT),
@@ -474,7 +475,11 @@ c         irel=nfla_ir(irea)
 cdr  case 6,7: to be done
         end select
       ENDDO
-
+c
+      IF (ALLOCATED(RTAB)) THEN
+        DEALLOCATE (RTAB)
+        DEALLOCATE (ETAB)
+      END IF
       CLOSE (UNIT=13+ifoff)
       RETURN
 

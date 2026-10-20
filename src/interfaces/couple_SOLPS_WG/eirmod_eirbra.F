@@ -285,7 +285,7 @@ csw mpi
       subroutine eirene_broadcast_eirbra
 
       integer :: inum, ierr
-#ifdef USE_MPI
+#if ( defined(USE_MPI) && !defined(OPEN_MPI) && !defined(GFORTRAN) && !defined(CRAY) )
       external :: mpi_bcast
 #endif
 
@@ -397,7 +397,7 @@ cdjm Jan2017
         integer, intent(in) :: istr  !< stratum index
         integer, intent(in) :: irank !< where to send
         integer :: ierr
-#ifdef USE_MPI
+#if( defined(USE_MPI) && !defined(OPEN_MPI) && !defined(GFORTRAN) && !defined(CRAY) )
         external :: mpi_send
 #endif
 
@@ -417,7 +417,7 @@ cdjm Jan2017
 !> rank from where the message was sent
         integer, intent(in) :: irank
         integer :: ierr
-#ifdef USE_MPI
+#if ( defined(USE_MPI) && !defined(OPEN_MPI) && !defined(GFORTRAN) && !defined(CRAY) )
         external :: mpi_recv
 #endif
 

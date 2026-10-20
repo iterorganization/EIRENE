@@ -39,4 +39,3 @@ LDLIBS  = -L/usr/local/lib -L/usr/lib64
 #!!!Local Variables:
 #!!! mode: Makefile
 #!!! End:
-

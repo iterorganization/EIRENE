@@ -31,4 +31,3 @@ LDLIBS    = -L/usr/local/lib -L/usr/X11R6/lib
 #!!!Local Variables:
 #!!! mode: Makefile
 #!!! End:
-

@@ -25,6 +25,8 @@
         OPEN (UNIT=29+ifoff,
      .       FILE=trim(MASTER_PATH)//'/modules/Eirene/Database/'//
      .       TRIM(DSN),IOSTAT=ierr)
+      else
+        ierr = 1
       end if
 
       if ( ierr /= 0 .or. .not.found0) then

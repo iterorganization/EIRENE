@@ -150,7 +150,7 @@ cswx
 
       SUBROUTINE EIRENE_upcusr_reinit
       IMPLICIT NONE
-      INTEGER :: I
+      INTEGER :: I,J
 
       if(lfirst) then
         lfirst=.false.

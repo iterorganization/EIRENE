@@ -5,15 +5,15 @@ GLI_HOME ?= ${SOLPSTOP}/lib
 endif
 ifdef SOLPS_OPENMP
 ifdef SOLPS_MPI
-LD_NAG    = `pkg-config sci_mpi_mp --libs`
+LD_NAG    = $(shell pkg-config sci_mpi_mp --libs)
 else
-LD_NAG    = `pkg-config sci_mp --libs`
+LD_NAG    = $(shell pkg-config sci_mp --libs)
 endif
 else
 ifdef SOLPS_MPI
-LD_NAG    = `pkg-config sci_mpi --libs`
+LD_NAG    = $(shell pkg-config sci_mpi --libs)
 else
-LD_NAG    = `pkg-config sci --libs`
+LD_NAG    = $(shell pkg-config sci --libs)
 endif
 endif
 
@@ -70,4 +70,3 @@ COMPILE   = ${FC} -c ${FCOPTS} ${INCMOD}${OBJDIR}
 #!!!Local Variables:
 #!!! mode: Makefile
 #!!! End:
-

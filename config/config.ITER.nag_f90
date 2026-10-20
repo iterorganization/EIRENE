@@ -3,7 +3,7 @@ GR_ROOT  ?= ${EBROOTGR}
 GLI_HOME ?= ${EBROOTGLI}
 LD_GR    ?= -L${GR_ROOT}/lib -lgr -lgfortran
 LD_GKS   ?= -L${GKSDIR} -lGKS -lXmu -lX11 -lXt
-LD_NAG   ?= `pkg-config openblas --libs`
+LD_NAG   ?= $(shell pkg-config openblas --libs)
 
 # File compiler.macro for NAG compiler
 ifndef SOLPS_CPP
@@ -48,4 +48,3 @@ OBJDEST  = -mdir ${OBJDIR} -o ${OBJDIR}/$*.o
 #!!!Local Variables:
 #!!! mode: Makefile
 #!!! End:
-

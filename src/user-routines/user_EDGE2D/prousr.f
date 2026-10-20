@@ -23,6 +23,7 @@ C
       USE EIRMOD_CINIT
       USE EIRMOD_CCONA
       USE EIRMOD_COMPRT
+      USE EIRMOD_USRDATA
 
       IMPLICIT NONE
       REAL(DP), INTENT(IN) :: P0, P1, P2, P3, P4, P5, PROVAC
@@ -35,7 +36,7 @@ C
       INTEGER, SAVE :: INDAR(11)=(/ (0, i=1,11) /)
       integer, parameter :: fp=31
       character(2) :: cstr2
-      integer :: idum
+      integer :: idum,idum2,idum3,idum4,idum5
       real(dp) :: rdum
       INTEGER, SAVE :: IPLSTI, IPLSV
 csw
@@ -48,6 +49,8 @@ c just in case...:
          return
       endif
 csw
+       npls_fix = nplsi
+       if(nbkgusr>0) npls_fix = nplsi - nbkgusr
 
 c read in plasma data from fort.31 ?
       if (.not.allocated(plas)) then
@@ -73,11 +76,12 @@ c misc plasma data:
            read(fp+ifoff,'(a)') line
         enddo
 
-        read(fp+ifoff,'(i7)') ntr
+        read(fp+ifoff,'(i8)') ntr
         if (ntr /= nr1st-1) then
            write (*,*) 'PROUSR:', sstr
            write (*,*) ' wrong number of triangles in plasma file'
-           write (*,*) ' check for correct number in file ',filename
+           write (*,*) ' check for correct number in file ',filename,
+     .                      ntr,nr1st-1
            call EIRENE_exit_own(1)
         endif
 
@@ -85,7 +89,7 @@ c misc plasma data:
            read(fp+ifoff,'(i7,7(1x,e14.7))') idum,
 c     .          te,ne,bx,by,bz,pot,psi
      .          plas(1,j,0),
-     .          rdum,
+     .          plas(12,j,0),
      .          plas(7,j,0),
      .          plas(8,j,0),
      .          plas(9,j,0),
@@ -110,7 +114,7 @@ c     .          te,ne,bx,by,bz,pot,psi
         plas(10,ntr+1:nrad,0) = 1._dp
 
 c loop over species:
-        do i=1,npls
+        do i=1,npls_fix
            write(cstr2,'(i2.2)') i
            write(sstr,'(a23)')
      .          '*** ION #'//cstr2//' PLASMA DATA'
@@ -125,11 +129,12 @@ c loop over species:
               read(fp+ifoff,'(a)') line
            enddo
 
-           read(fp+ifoff,'(i7)') ntr
+           read(fp+ifoff,'(i8)') ntr
            if (ntr /= nr1st-1) then
               write (*,*) 'PROUSR:', sstr
               write (*,*) ' wrong number of triangles in plasma file'
-              write (*,*) ' check for correct number in file ',filename
+              write (*,*) ' check for correct number in file ',filename,
+     .                      ntr,nr1st-1
               call EIRENE_exit_own(1)
            endif
 
@@ -156,6 +161,8 @@ c
       if(indx == 0) then
 c te
          pro(1:n) = plas(1,1:n,0)
+c ne (fill using global). Temporary hack, better with another indx
+         if(eirene_use_e2d_ne) dein(1:n) = plas(12,1:n,0)
          indar(1) = indar(1)+1
 c     WARNING!: Assume te is always called before Ti an Vi
          IPLSTI = 0
@@ -168,12 +175,20 @@ c ti
             write(IUNOUT,*) "IPLSTI = ",IPLSTI," NPLS=",NPLS
             call EIRENE_exit_own(1)
          ENDIF
-         pro(1:n) = plas(2,1:n,iplsti)
+         IF(IPLSTI .GT. npls_fix) then
+             pro(1:n) = tiin(iplsti,1:n)
+         ELSE
+             pro(1:n) = plas(2,1:n,iplsti)
+         ENDIF
          indar(2) = indar(2)+1
 
       elseif (indx == 1+1*npls) then
 c ni
-         pro(1:n) = plas(3,1:n,ipls)
+         IF(ipls .GT. npls_fix) then
+             pro(1:n) = diin(ipls,1:n)
+         ELSE
+             pro(1:n) = plas(3,1:n,ipls)
+         ENDIF
          indar(3) = indar(3) + 1
 
       elseif (indx == 1+2*npls) then
@@ -184,17 +199,29 @@ c vx
             write(IUNOUT,*) "IPLSV = ",IPLSV," NPLS=",NPLS
             call EIRENE_exit_own(1)
          ENDIF
-         pro(1:n) = plas(4,1:n,iplsv)
+         IF(ipls .GT. npls_fix) then
+             pro(1:n) = vxin(ipls,1:n)
+         ELSE
+             pro(1:n) = plas(4,1:n,iplsv)
+         ENDIF
          indar(4) = indar(4) + 1
 
       elseif (indx == 1+3*npls) then
 c vy
-         pro(1:n) = plas(5,1:n,iplsv)
+         IF(ipls .GT. npls_fix) then
+             pro(1:n) = vyin(ipls,1:n)
+         ELSE
+             pro(1:n) = plas(5,1:n,iplsv)
+         ENDIF
          indar(5) = indar(5) + 1
 
       elseif (indx == 1+4*npls) then
 c vz
-         pro(1:n) = plas(6,1:n,iplsv)
+         IF(ipls .GT. npls_fix) then
+             pro(1:n) = vzin(ipls,1:n)
+         ELSE
+             pro(1:n) = plas(6,1:n,iplsv)
+         ENDIF
          indar(6) = indar(6) + 1
 
       elseif (indx == 1+1*npls+NPLSTI+3*NPLSV) then
@@ -230,7 +257,11 @@ c      EFIN: indx=10+1*NPLS+NPLSTI+3*NPLSV
 c      ZI for charge bundling
       elseif (indx == 12+1*NPLS+NPLSTI+3*NPLSV) then
 c! zi
-        pro(1:n) = plas(11,1:n,ipls)
+         IF(ipls .GT. npls_fix) then
+             pro(1:n) = ziin(ipls,1:n)
+         ELSE
+             pro(1:n) = plas(11,1:n,ipls)
+         ENDIF
 
       else
          write (iunout,*) ' prousr: no data provided for index ',indx

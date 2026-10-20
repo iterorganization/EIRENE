@@ -1,54 +1,53 @@
 # Test whether necessary variables are set
 ifdef SOLPSLIB
-LD_GR ?= -L${SOLPSLIB} -lgr
-LD_GKS ?= -L${SOLPSLIB} -lgks
-GLI_HOME ?= ${SOLPSTOP}/lib
+  LD_GR ?= -L${SOLPSLIB} -lgr
+  LD_GKS ?= -L${SOLPSLIB} -lgks
+  GLI_HOME ?= ${SOLPSTOP}/lib
 endif
 
 # Build with JSON if present
 ifeq ($(shell `pkg-config --exists json-fortran`; echo $$?),0)
-JSON_INC ?= `pkg-config json-fortran --cflags`
-LD_JSON ?= `pkg-config json-fortran --libs`
+  JSON_INC ?= $(shell pkg-config json-fortran --cflags)
+  LD_JSON ?= $(shell pkg-config json-fortran --libs)
 endif
 
 # DEFINES += -DRECL_UNITS_PER_DOUBLE=8 -DNO_SAVE
 ifndef SOLPS_CPP
-DEFINES += -DG95 -DLEGACYCOMP
-NO_MPI  ?= true
+  DEFINES += -DG95 -DLEGACYCOMP
+  NO_MPI  ?= true
 endif
 
 ifdef SOLPS_MPI
-DEFINES += -DMPI_VERSION=${MPI_VERSION} -DMPI_MOD=${MPI_MOD}
+  DEFINES += -DMPI_VERSION=${MPI_VERSION} -DMPI_MOD=${MPI_MOD}
 endif
-INCLUDE += ${JSON_INC}
+INCLUDE   += ${JSON_INC}
 
-CPP      = -/lib/cpp -C -traditional -ffreestanding
-FC       = g95
+CPP        = -/lib/cpp -C -traditional -ffreestanding
+FC         = g95
 
-FCOPTS   = -fPIC -fno-second-underscore
+FCOPTS     = -fPIC -fno-second-underscore
 ifdef SOLPS_DEBUG
-FCOPTS  += -g -C -fbounds-check -ftrace=full
-CFLAGS   = -g
+  FCOPTS  += -g -C -fbounds-check -ftrace=full
+  CFLAGS   = -g
 else
-FCOPTS  += -O
+  FCOPTS  += -O
 endif
 
 ifdef LD_GR
-GKS      = ${LD_GR} ${LD_GKS} -lX11 -lXt
+  GKS      = ${LD_GR} ${LD_GKS} -lX11 -lXt
 endif
 
-LDLIBS   = -L/usr/local/lib
-LDEXTRA  = ${LD_JSON}
+LDLIBS     = -L/usr/local/lib
+LDEXTRA    = ${LD_JSON}
 
 # new
 
-INCMOD   = -I
-MOD      = mod
-OBJDEST  = -fmod=${OBJDIR} -o ${OBJDIR}/$*.o
+INCMOD     = -I
+MOD        = mod
+OBJDEST    = -fmod=${OBJDIR} -o ${OBJDIR}/$*.o
 
-COMPILE  = ${FC} -c ${FCOPTS} ${INCMOD}${OBJDIR}
+COMPILE    = ${FC} -c ${FCOPTS} ${INCMOD}${OBJDIR}
 
 #!!!Local Variables:
 #!!! mode: Makefile
 #!!! End:
-

@@ -9,8 +9,8 @@ endif
 
 # Build with JSON if present
 ifeq ($(shell `pkg-config --exists json-fortran`; echo $$?),0)
-  JSON_INC ?= `pkg-config json-fortran --cflags`
-  LD_JSON ?= `pkg-config json-fortran --libs`
+  JSON_INC ?= $(shell pkg-config json-fortran --cflags)
+  LD_JSON ?= $(shell pkg-config json-fortran --libs)
 endif
 
 #DEFINES += -DTRIANG -DRECL_UNITS_PER_DOUBLE=8 -DNO_FORT10 -DNO_SHORT_CYCLE -DNO_F01AAF
@@ -68,4 +68,3 @@ BLD      = ar rcv
 #!!!Local Variables:
 #!!! mode: Makefile
 #!!! End:
-

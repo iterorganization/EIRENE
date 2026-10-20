@@ -78,7 +78,7 @@ MODULE EIRMOD_PRESSURELOOP
       pressure = 0._DP
       DO i = 1, NATM
         IF (PDENA(i, PFL%cellRef) > EPS30) THEN
-        pressure = pressure + EV_TO_J*1.D6*EDENA(i, PFL%cellRef)/1.5_DP -             &
+        pressure = pressure + EV_TO_J*1.D6*EDENA(i, PFL%cellRef)/1.5_DP -  &
                               ergVol2Pa*(VXDENA(i, PFL%cellRef)**2 +       &
                                          VYDENA(i, PFL%cellRef)**2 +       &
                                          VZDENA(i, PFL%cellRef)**2)/       &
@@ -91,7 +91,7 @@ MODULE EIRMOD_PRESSURELOOP
       !Molecules
       DO i =1, NMOL
         IF (PDENM(i, PFL%cellRef) > EPS30) THEN
-        pressure = pressure + EV_TO_J*1.D6*EDENM(i, PFL%cellRef)/1.5_DP -             &
+        pressure = pressure + EV_TO_J*1.D6*EDENM(i, PFL%cellRef)/1.5_DP -  &
                               ergVol2Pa*(VXDENM(i, PFL%cellRef)**2 +       &
                                          VYDENM(i, PFL%cellRef)**2 +       &
                                          VZDENM(i, PFL%cellRef)**2)/       &

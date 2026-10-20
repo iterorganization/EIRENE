@@ -1,6 +1,6 @@
 # CMake project file for EIRENE
 
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.10)
 
 project(EIRENE Fortran)
 
@@ -17,10 +17,10 @@ endif()
 
 # Adds compiler flags to all build types.
 if("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "Intel")
-  set(CMAKE_Fortran_FLAGS_RELEASE "-fp-model source -fpp")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-fp-model source -fpp -O3 -qopt-zmm-usage=high")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -fpp -gen-interfaces -warn all,interfaces -check all -traceback -fpe0 -diag-disable:10182")
 elseif("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "IntelLLVM")
-  set(CMAKE_Fortran_FLAGS_RELEASE "-fp-model source -fpp")
+  set(CMAKE_Fortran_FLAGS_RELEASE "-fp-model source -fpp -O3 -mprefer-vector-width=512")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -fpp -gen-interfaces -warn all,interfaces -check all,nouninit -traceback -fpe0 -diag-disable:10182,10440")
   string(APPEND CMAKE_EXE_LINKER_FLAGS_DEBUG "-check all,nouninit")
 elseif("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "GNU")
@@ -142,6 +142,8 @@ else()
     message(STATUS " Detecting LibJSON. By default the static library will be used.")
     if("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "Intel")
       find_package(jsonfortran NAMES jsonfortran-intel)
+    elseif("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "IntelLLVM")
+      find_package(jsonfortran NAMES jsonfortran-intelllvm)
     elseif("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "GNU")
       find_package(jsonfortran NAMES jsonfortran-gnu)
     else()
@@ -222,12 +224,14 @@ if (B25_EIRENE)
     add_definitions(-DDIMENSIONS_MODULE)
     if(EXISTS "$ENV{SOLPSTOP}/modules/B2.5/src/modules.local/b2mod_dimensions.F")
       include_directories($ENV{SOLPSTOP}/modules/B2.5/src/modules.local)
+      set(B2MOD_DIMENSIONS_SRC "$ENV{SOLPSTOP}/modules/B2.5/src/modules.local/b2mod_dimensions.F")
     else()
       include_directories($ENV{SOLPSTOP}/modules/B2.5/src/modules)
+      set(B2MOD_DIMENSIONS_SRC "$ENV{SOLPSTOP}/modules/B2.5/src/modules/b2mod_dimensions.F")
     endif()
   endif()
-  set(GR-DUMMY_LIBRARY_NAME "gr_dummy" CACHE STRING "GR-DUMMY library name")
 endif()
+set(GR_DUMMY_LIBRARY_NAME "gr_dummy" CACHE STRING "gr_dummy library name")
 if(DEFINED ENV{SOLPS_CPP})
   if( NOT "$ENV{SOLPS_CPP}" STREQUAL "")
     message(STATUS "-- Adding SOLPS-ITER environment flags...")
@@ -276,12 +280,12 @@ endif()
 # Add option to enable OpenMP with the parallel region defined in eirmod_mcarlo.
 option(OPENMP "Build for use with internal parallel region" OFF)
 if (OPENMP)
-  cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
+  cmake_minimum_required(VERSION 3.1...3.10 FATAL_ERROR)
   message(STATUS "-- Adding USE_OPENMP flag...")
   add_definitions(-DUSE_OPENMP)
   find_package(OpenMP REQUIRED)
   if ("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "IntelLLVM")
-    message(FATAL_ERROR "-- OpenMP is unsafe with ifx compiler! Do not use. --")
+    message(STATUS "-- OpenMP is unsafe with ifx compiler! Do not use. --")
   endif()
 endif()
 
@@ -299,7 +303,7 @@ endif()
 if (OPENMP_FOUND)
   set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
   if("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "Intel")
-    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -qoverride-limits")
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -qoverride-limits -qopenmp-threadprivate=compat")
 # elseif("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "Cray")
 #   set(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG} -M 3140")
   endif()
@@ -309,9 +313,18 @@ endif()
 # relative path. Relative path is stored in variable 'fortran_dirs'.
 message(STATUS "Detecting fortran files (*.[fF]/*.[fF]90) in subdirectories of "
                ${PROJECT_SOURCE_DIR})
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/assistant/version.f")
-  file(TOUCH ${PROJECT_SOURCE_DIR}/assistant/version.f)
+# The git-version source (version.f) is generated per build into this build's
+# own binary directory (see the 'version' custom target below) rather than into
+# the shared source tree.  Generating it under PROJECT_SOURCE_DIR caused a
+# parallel-build race: 'make -jN all' configures two CMake build trees that
+# share this same source directory (the standalone Eirene executable and the
+# B2.5-coupled EIRENE library), and both would write and compile
+# assistant/version.f concurrently, corrupting the build.
+set(EIRENE_VERSION_F ${PROJECT_BINARY_DIR}/version.f)
+if(NOT EXISTS "${EIRENE_VERSION_F}")
+  file(TOUCH ${EIRENE_VERSION_F})
 endif()
+set_source_files_properties(${EIRENE_VERSION_F} PROPERTIES GENERATED TRUE)
 file(GLOB_RECURSE fortran_files RELATIVE ${PROJECT_SOURCE_DIR}
      ${PROJECT_SOURCE_DIR}/*.[fF]
      ${PROJECT_SOURCE_DIR}/*.[fF]90)
@@ -330,6 +343,11 @@ foreach(fortran_dir ${fortran_dirs})
                                ${PROJECT_SOURCE_DIR}/${fortran_dir}/*.[fF]90)
 endforeach()
 
+# version.f is now generated into the build dir (EIRENE_VERSION_F) and added to
+# the EIRENE target explicitly below; drop any stale source-tree copy left by an
+# older layout or by a traditional (NO_CMAKE) build so it is not compiled twice.
+list(REMOVE_ITEM src_assistant ${PROJECT_SOURCE_DIR}/assistant/version.f)
+
 # Remove program file to be able to add it separately if required.
 list(GET src_main-routines 0 fortran_file)
 get_filename_component(fortran_dir ${fortran_file} PATH)
@@ -345,25 +363,65 @@ if( NOT src_user-routines/x )
   message(FATAL_ERROR "No user-routines named \"${EIRENE_USER-ROUTINES}\"")
 endif()
 
+# Suppress unused-dummy-argument warnings for stub (dummy) source directories.
+# These routines intentionally receive but ignore their arguments.
+if("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "GNU" OR
+   "${CMAKE_Fortran_COMPILER_ID}" STREQUAL "G95")
+  set(_dummy_no_unused_flag "-Wno-unused-dummy-argument")
+elseif("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "Intel" OR
+       "${CMAKE_Fortran_COMPILER_ID}" STREQUAL "IntelLLVM")
+  set(_dummy_no_unused_flag "-warn nounused")
+elseif("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "NAG")
+  set(_dummy_no_unused_flag "-w=uda")
+endif()
+if(_dummy_no_unused_flag)
+  set_source_files_properties(
+    ${src_grsoft-dummy} ${src_plot_dummy} ${src_broadcast_dummy}
+    ${PROJECT_SOURCE_DIR}/modules/eirmod_mpi.F90
+    PROPERTIES COMPILE_FLAGS "${_dummy_no_unused_flag}")
+endif()
+
 # Add option to control whether graphics will be enabled.
 option(GRAPHICS "Build with graphics enabled" OFF)
 
 # Add linking to the plotting libraries
 set(plotpath "")
-if( NOT B25_EIRENE )
+if(DEFINED ENV{SOLPS_CPP})
 
-  add_executable(eirene main-routines/eirene_main.F)
+  # --- SOLPS-ITER environment ------------------------------------------------
+  # The plotting logic itself (src_plotting) does not depend on whether it
+  # ends up linked against the real GKS/GRS libraries or against the no-op
+  # gr_dummy stubs, so it is always compiled once, as part of the EIRENE
+  # library, regardless of GRAPHICS/B25_EIRENE. Standalone Eirene then always
+  # builds BOTH a real-graphics executable (eirobj) and a dummy-graphics
+  # executable (eirobjx) from a single configure/build, and coupled
+  # (B25_EIRENE) Eirene always links against the dummy stubs (B2.5 has its
+  # own, independent, Catalyst/ParaView plotting). This means toggling
+  # GRAPHICS never changes what EIRENE (or gr_dummy) compiles, so it never
+  # forces a reconfigure/recompile of either -- unlike the legacy behaviour
+  # below, which is preserved unchanged for the standalone (non-SOLPS-ITER)
+  # Eirene CI.
+  list(APPEND plotpath ${src_plotting})
 
-  if(GRAPHICS)
+  if( NOT B25_EIRENE )
+
+    add_executable(eirene main-routines/eirene_main.F)
+    add_executable(eirenex main-routines/eirene_main.F)
 
     message(STATUS " --  Setting libraries for internal plotting:  --  --")
 
     if(LibGKS)
-      get_filename_component(LibGKS ${LibGKS} ABSOLUTE)
-      set(LibGKS_local "yes")
+      if (EXISTS ${LibGKS})
+        get_filename_component(LibGKS ${LibGKS} ABSOLUTE)
+        set(LibGKS_found "yes")
+      else()
+        message(STATUS "Specified LibGKS was not found")
+        unset(LibGKS)
+      endif()
     else()
       find_library(LibGKS gks)
       if(LibGKS)
+        set(LibGKS_found "yes")
         message(STATUS "Using system GKS library " ${LibGKS})
         message(STATUS "To change it, use: -DLibGKS=$PATH_TO_GKS_LIB/libgks.a")
       else()
@@ -373,11 +431,17 @@ if( NOT B25_EIRENE )
     endif()
 
     if(LibGRS)
-      get_filename_component(LibGRS ${LibGRS} ABSOLUTE)
-      set(LibGRS_local "yes")
+      if (EXISTS ${LibGRS})
+        get_filename_component(LibGRS ${LibGRS} ABSOLUTE)
+        set(LibGRS_found "yes")
+      else()
+        message(STATUS "Specified LibGRS was not found")
+        unset(LibGRS)
+      endif()
     else()
       find_library(LibGRS gr)
       if(LibGRS)
+        set(LibGRS_found "yes")
         message(STATUS "Using system GR library " ${LibGRS})
         message(STATUS "To change it, use: -DLibGRS=$PATH_TO_GRSOFT_LIB/libgr.a")
       else()
@@ -387,11 +451,17 @@ if( NOT B25_EIRENE )
     endif()
 
     if(LibX11)
-      get_filename_component(LibX11 ${LibX11} ABSOLUTE)
-      set(LibX11_local "yes")
+      if (EXISTS ${LibX11})
+        get_filename_component(LibX11 ${LibX11} ABSOLUTE)
+        set(LibX11_found "yes")
+      else()
+        message(STATUS "Specified LibX11 was not found")
+        unset(LibX11)
+      endif()
     else()
       find_library(LibX11 X11)
       if(LibX11)
+        set(LibX11_found "yes")
         message(STATUS "Using system X11 library " ${LibX11})
         message(STATUS "To change it, use: -DLibX11=$PATH_TO_X11_LIB/libX11.so")
       else()
@@ -401,11 +471,17 @@ if( NOT B25_EIRENE )
     endif()
 
     if(LibXt)
-      get_filename_component(LibXt ${LibXt} ABSOLUTE)
-      set(LibXt_local "yes")
+      if (EXISTS ${LibXt})
+        get_filename_component(LibXt ${LibXt} ABSOLUTE)
+        set(LibXt_found "yes")
+      else()
+        message(STATUS "Specified LibXt was not found")
+        unset(LibXt)
+      endif()
     else()
       find_library(LibXt Xt)
       if(LibXt)
+        set(LibXt_found "yes")
         message(STATUS "Using system libXt library " ${LibXt})
         message(STATUS "To change it, use: -DLibXt=$PATH_TO_Xt_LIB/libXt.so")
       else()
@@ -415,11 +491,17 @@ if( NOT B25_EIRENE )
     endif()
 
     if(Libz)
-      get_filename_component(Libz ${Libz} ABSOLUTE)
-      set(Libz_local "yes")
+      if (EXISTS ${Libz})
+        get_filename_component(Libz ${Libz} ABSOLUTE)
+        set(Libz_found "yes")
+      else()
+        message(STATUS "Specified Libz was not found")
+        unset(Libz)
+      endif()
     else()
       find_library(Libz z)
       if(Libz)
+        set(Libz_found "yes")
         message(STATUS "Using system libz library " ${Libz})
         message(STATUS "To change it, use: -DLibz=$PATH_TO_z_LIB/libz.so")
       else()
@@ -449,30 +531,177 @@ if( NOT B25_EIRENE )
           message(STATUS "export GRSOFT_DEVICE=62")
         endif()
       endif()
-      message(STATUS " --  Plotting will be enabled.")
+      message(STATUS " --  eirobj (real-graphics executable) will be built.")
+    else()
+      message(STATUS " --  --  Real graphics libraries not found/specified: only")
+      message(STATUS " --  --  eirobjx (dummy-graphics executable) will be built.")
+      message(STATUS " --  --  Use -DLibGKS=... -DLibGRS=... -DLibX11=... -DLibXt=... -DLibz=... to also build eirobj.")
+      # eirene (eirobj) cannot link without the real graphics libraries.
+      # Exclude it from CMake's default "all" meta-target so a plain build
+      # (and CI, which never provides -DLibGKS=...) does not attempt to
+      # link it and fail; it remains buildable on request via
+      # "cmake --build . --target eirene" once the libraries are supplied.
+      set_target_properties(eirene PROPERTIES EXCLUDE_FROM_ALL TRUE)
     endif()
 
   else()
-    message(STATUS " --  --  Set -DGRAPHICS=ON to enable plotting.")
+    message(STATUS " --  Eirene coupled to B2.5: using dummy (no-op) graphics stubs.")
   endif()
 
-endif()
-
-# Decide whether to use plotting or plot_dummy.
-if(LibGRS AND LibGKS AND LibX11 AND Libz AND LibXt AND GRAPHICS)
-  list(APPEND plotpath ${src_plotting})
 else()
-  if(DEFINED ENV{SOLPS_CPP})
-    list(APPEND plotpath ${src_plotting} ${src_grsoft-dummy})
+
+  # --- Standalone Eirene CI (outside SOLPS-ITER): unchanged legacy behaviour -
+  if( NOT B25_EIRENE )
+
+    add_executable(eirene main-routines/eirene_main.F)
+
+    if(GRAPHICS)
+
+      message(STATUS " --  Setting libraries for internal plotting:  --  --")
+
+      if(LibGKS)
+        if (EXISTS ${LibGKS})
+          get_filename_component(LibGKS ${LibGKS} ABSOLUTE)
+          set(LibGKS_found "yes")
+        else()
+          message(STATUS "Specified LibGKS was not found")
+          unset(LibGKS)
+        endif()
+      else()
+        find_library(LibGKS gks)
+        if(LibGKS)
+          set(LibGKS_found "yes")
+          message(STATUS "Using system GKS library " ${LibGKS})
+          message(STATUS "To change it, use: -DLibGKS=$PATH_TO_GKS_LIB/libgks.a")
+        else()
+          message(STATUS "Path to LibGKS unset")
+          message(STATUS "You may want to try -DLibGKS=$PATH_TO_GKS_LIB/libgks.a")
+        endif()
+      endif()
+
+      if(LibGRS)
+        if (EXISTS ${LibGRS})
+          get_filename_component(LibGRS ${LibGRS} ABSOLUTE)
+          set(LibGRS_found "yes")
+        else()
+          message(STATUS "Specified LibGRS was not found")
+          unset(LibGRS)
+        endif()
+      else()
+        find_library(LibGRS gr)
+        if(LibGRS)
+          set(LibGRS_found "yes")
+          message(STATUS "Using system GR library " ${LibGRS})
+          message(STATUS "To change it, use: -DLibGRS=$PATH_TO_GRSOFT_LIB/libgr.a")
+        else()
+          message(STATUS "Path to LibGRS unset")
+          message(STATUS "You may want to try -DLibGRS=$PATH_TO_GRSOFT_LIB/libgr.a")
+        endif()
+      endif()
+
+      if(LibX11)
+        if (EXISTS ${LibX11})
+          get_filename_component(LibX11 ${LibX11} ABSOLUTE)
+          set(LibX11_found "yes")
+        else()
+          message(STATUS "Specified LibX11 was not found")
+          unset(LibX11)
+        endif()
+      else()
+        find_library(LibX11 X11)
+        if(LibX11)
+          set(LibX11_found "yes")
+          message(STATUS "Using system X11 library " ${LibX11})
+          message(STATUS "To change it, use: -DLibX11=$PATH_TO_X11_LIB/libX11.so")
+        else()
+          message(STATUS "Path to LibX11 unset")
+          message(STATUS "You may want to try -DLibX11=$PATH_TO_X11_LIB/libX11.so")
+        endif()
+      endif()
+
+      if(LibXt)
+        if (EXISTS ${LibXt})
+          get_filename_component(LibXt ${LibXt} ABSOLUTE)
+          set(LibXt_found "yes")
+        else()
+          message(STATUS "Specified LibXt was not found")
+          unset(LibXt)
+        endif()
+      else()
+        find_library(LibXt Xt)
+        if(LibXt)
+          set(LibXt_found "yes")
+          message(STATUS "Using system libXt library " ${LibXt})
+          message(STATUS "To change it, use: -DLibXt=$PATH_TO_Xt_LIB/libXt.so")
+        else()
+          message(STATUS "Path to LibXt unset")
+          message(STATUS "You may want to try -DLibXt=$PATH_TO_Xt_LIB/libXt.so")
+        endif()
+      endif()
+
+      if(Libz)
+        if (EXISTS ${Libz})
+          get_filename_component(Libz ${Libz} ABSOLUTE)
+          set(Libz_found "yes")
+        else()
+          message(STATUS "Specified Libz was not found")
+          unset(Libz)
+        endif()
+      else()
+        find_library(Libz z)
+        if(Libz)
+          set(Libz_found "yes")
+          message(STATUS "Using system libz library " ${Libz})
+          message(STATUS "To change it, use: -DLibz=$PATH_TO_z_LIB/libz.so")
+        else()
+          message(STATUS "Path to Libz unset")
+          message(STATUS "You may want to try -DLibz=$PATH_TO_z_LIB/libz.so")
+        endif()
+      endif()
+
+      if(LibGKS AND LibGRS AND LibX11 AND Libz AND LibXt)
+        message(STATUS "Found the following libraries used for plotting:")
+        message(STATUS "  Lib GKS: " ${LibGKS})
+        message(STATUS "  Lib GRS: " ${LibGRS})
+        message(STATUS "  Lib X11: " ${LibX11})
+        message(STATUS "  Lib Xt:  " ${LibXt})
+        message(STATUS "  Lib z:   " ${Libz})
+
+        if(DEFINED ENV{GRSOFT_DEVICE})
+          string(FIND $ENV{GRSOFT_DEVICE} "62" GRSOFT_OK)
+        endif()
+        if( NOT ( DEFINED ENV{GLI_HOME} AND ( GRSOFT_OK GREATER -1 ) ) )
+          message(STATUS "For running, please export the following statements "
+                         "into your console:")
+          if(NOT ( DEFINED ENV{GLI_HOME} ) )
+            message(STATUS "export GLI_HOME=$PATH_TO_GKS_LIB")
+          endif()
+          if( GRSOFT_OK EQUAL -1 )
+            message(STATUS "export GRSOFT_DEVICE=62")
+          endif()
+        endif()
+        message(STATUS " --  Plotting will be enabled.")
+      endif()
+
+    else()
+      message(STATUS " --  --  Set -DGRAPHICS=ON to enable plotting.")
+    endif()
+
+  endif()
+
+  # Decide whether to use plotting or plot_dummy.
+  if(LibGRS AND LibGKS AND LibX11 AND Libz AND LibXt AND GRAPHICS)
+    list(APPEND plotpath ${src_plotting})
   else()
     list(APPEND plotpath ${src_plot_dummy} ${src_grsoft-dummy})
+    message(STATUS " --  Plotting will be disabled.")
+    set(SOLPS_POSTFIX "x")
   endif()
-  message(STATUS " --  Plotting will be disabled.")
-  set(SOLPS_POSTFIX "x")
+
 endif()
 
 # Adds EIRENE library to the project.
-add_library(EIRENE ${src_assistant} ${src_broadcast} ${src_diagno}
+add_library(EIRENE ${src_assistant} ${EIRENE_VERSION_F} ${src_broadcast} ${src_diagno}
                    ${src_file-handling} ${src_function_modules} ${src_geometry}
                    ${src_geometry/time-routines} ${src_interface/x}
                    ${src_iterate} ${src_main-routines} ${src_mathematics}
@@ -482,8 +711,36 @@ add_library(EIRENE ${src_assistant} ${src_broadcast} ${src_diagno}
                    ${src_surface-processes} ${src_tetrahedra}
                    ${src_user-routines/x} ${src_volume-processes})
 
+# gr_dummy (no-op GR-primitive stubs) is built as a separate library whenever
+# it is needed for linking: always for the coupled (B25_EIRENE) case (B2.5
+# never uses real graphics), and also for the SOLPS-ITER standalone case
+# (used to link the dummy-graphics "eirenex"/eirobjx executable alongside
+# the real-graphics "eirene"/eirobj executable). It is intentionally NOT
+# built for the legacy standalone Eirene CI (non-SOLPS-ITER, GRAPHICS-toggle
+# based) case, where the dummy stubs are instead compiled directly into
+# EIRENE's own source list (see plotpath above).
+if(B25_EIRENE OR DEFINED ENV{SOLPS_CPP})
+  add_library(gr_dummy ${src_grsoft-dummy})
+  # gr_dummy's sources use modules (e.g. EIRMOD_PRECISION) provided by the
+  # EIRENE library's .mod files, so it must always be built after EIRENE,
+  # in both the coupled (B25_EIRENE) and standalone cases.
+  add_dependencies(gr_dummy EIRENE)
+endif()
+
 if(B25_EIRENE)
-  add_library(GR-DUMMY ${src_grsoft-dummy})
+  # When coupling to B2.5 with the DIMENSIONS_MODULE pragma, b2mod_dimensions.F
+  # (owned by B2.5) must be compiled as part of the EIRENE library so that the
+  # .mod file is available to eirmod_extrab25.F90 in this same build directory.
+  if(DIMENSIONS_MODULE AND B2MOD_DIMENSIONS_SRC)
+    get_target_property(_eirene_sources EIRENE SOURCES)
+    list(REMOVE_ITEM _eirene_sources
+      ${PROJECT_SOURCE_DIR}/interfaces/couple_${EIRENE_INTERFACE}/b2mod_dimensions.F)
+    set_target_properties(EIRENE PROPERTIES SOURCES "${_eirene_sources}")
+    target_sources(EIRENE PRIVATE ${B2MOD_DIMENSIONS_SRC})
+    set_source_files_properties(
+      ${PROJECT_SOURCE_DIR}/interfaces/couple_${EIRENE_INTERFACE}/eirmod_extrab25.F90
+      PROPERTIES OBJECT_DEPENDS ${B2MOD_DIMENSIONS_SRC})
+  endif()
 endif()
 
 if( NOT B25_EIRENE )
@@ -497,19 +754,19 @@ if( NOT B25_EIRENE )
     target_link_libraries(eirene ${MPI_Fortran_LIBRARIES})
   endif()
 # Link it to the graphics libraries.
-  if(LibGRS_local)
+  if(LibGRS_found)
     target_link_libraries(eirene ${LibGRS})
   endif()
-  if(LibGKS_local)
+  if(LibGKS_found)
     target_link_libraries(eirene ${LibGKS})
   endif()
-  if(LibX11_local)
+  if(LibX11_found)
     target_link_libraries(eirene ${LibX11})
   endif()
-  if(LibXt_local)
+  if(LibXt_found)
     target_link_libraries(eirene ${LibXt})
   endif()
-  if(Libz_local)
+  if(Libz_found)
     target_link_libraries(eirene ${Libz})
   endif()
 # Link to any other additional libraries.
@@ -519,6 +776,26 @@ if( NOT B25_EIRENE )
 # Include any additional linker options
   if (LINK_OPTIONS)
     target_link_options(eirene PUBLIC "LINKER:" ${LINK_OPTIONS})
+  endif()
+
+  if(DEFINED ENV{SOLPS_CPP})
+    # eirenex (eirobjx) always links against the dummy gr_dummy stubs, so it
+    # never depends on whether the real graphics libraries used by "eirene"
+    # (eirobj) were found -- neither executable's link inputs change when
+    # the other one's availability changes.
+    target_link_libraries(eirenex EIRENE gr_dummy)
+    if (LibJSON)
+      target_link_libraries(eirenex ${LibJSON})
+    endif()
+    if (MPI)
+      target_link_libraries(eirenex ${MPI_Fortran_LIBRARIES})
+    endif()
+    if (ADD_LIBS)
+      target_link_libraries(eirenex ${ADD_LIBS})
+    endif()
+    if (LINK_OPTIONS)
+      target_link_options(eirenex PUBLIC "LINKER:" ${LINK_OPTIONS})
+    endif()
   endif()
 
 endif()
@@ -538,26 +815,37 @@ if(DEFINED ENV{SOLPS_CPP})
                       ${PROJECT_BINARY_DIR}
                       OUTPUT_NAME ${EIRENE_LIBRARY_NAME})
   if ( NOT B25_EIRENE )
+    # Both executables always coexist, unconditionally, from a single
+    # configure/build -- neither one's name/location depends on GRAPHICS.
     set_target_properties(eirene PROPERTIES
                       RUNTIME_OUTPUT_DIRECTORY
                       ${PROJECT_BINARY_DIR}
-                      OUTPUT_NAME ${EIRENE_EXECUTABLE_NAME}${SOLPS_POSTFIX})
-  else()
-    set_target_properties(GR-DUMMY PROPERTIES
+                      OUTPUT_NAME ${EIRENE_EXECUTABLE_NAME})
+    set_target_properties(eirenex PROPERTIES
+                      RUNTIME_OUTPUT_DIRECTORY
+                      ${PROJECT_BINARY_DIR}
+                      OUTPUT_NAME ${EIRENE_EXECUTABLE_NAME}x)
+    set_target_properties(gr_dummy PROPERTIES
                       ARCHIVE_OUTPUT_DIRECTORY
                       ${PROJECT_BINARY_DIR}
-                      OUTPUT_NAME ${GR-DUMMY_LIBRARY_NAME})
-    add_dependencies(GR-DUMMY EIRENE)
+                      OUTPUT_NAME ${GR_DUMMY_LIBRARY_NAME})
+  else()
+    set_target_properties(gr_dummy PROPERTIES
+                      ARCHIVE_OUTPUT_DIRECTORY
+                      ${PROJECT_BINARY_DIR}
+                      OUTPUT_NAME ${GR_DUMMY_LIBRARY_NAME})
   endif()
 else()
   set_target_properties(EIRENE PROPERTIES
                       ARCHIVE_OUTPUT_DIRECTORY
                       ${PROJECT_BINARY_DIR}/../lib${CMAKE_BUILD_TYPE}
                       OUTPUT_NAME ${EIRENE_LIBRARY_NAME}${EIRENE_POSTFIX})
-  set_target_properties(eirene PROPERTIES
+  if ( NOT B25_EIRENE )
+    set_target_properties(eirene PROPERTIES
                       RUNTIME_OUTPUT_DIRECTORY
                       ${PROJECT_BINARY_DIR}/../bin${CMAKE_BUILD_TYPE}
                       OUTPUT_NAME ${EIRENE_EXECUTABLE_NAME}${EIRENE_POSTFIX})
+  endif()
 endif()
 
 # Adds optional local dependencies
@@ -621,6 +909,9 @@ if(GIT_FOUND)
     add_dependencies(EIRENE version)
     if ( NOT B25_EIRENE )
       add_dependencies(eirene version)
+      if(DEFINED ENV{SOLPS_CPP})
+        add_dependencies(eirenex version)
+      endif()
     endif()
   endif()
 endif()

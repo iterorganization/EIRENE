@@ -195,6 +195,8 @@ F90PATH=${INTDIR}:${SRCDIR}/broadcast:${SRCDIR}/modules
 FF90PATH=${INTDIR}:${SRCDIR}/broadcast:${SRCDIR}/modules
 VPATH=${FPATH}:${FFPATH}:${F90PATH}
 
+$(shell awk 'FNR==1{if(!/^OBJS *=/){e=1;exit}} END{exit e}' \
+        ${OBJDIR}/LISTOBJ 2>/dev/null || rm -f ${OBJDIR}/LISTOBJ)
 include ${OBJDIR}/LISTOBJ
 include ${SRCEIR}/config/compile
 ifeq ($(shell [ -e ${SRCEIR}/config/config.${HOST_NAME}.${COMPILER}.local ] && echo yes || echo no ),yes)
@@ -576,7 +578,7 @@ ifneq (${MOD},o)
 	@echo '# 5b' >> ${OBJDIR}/dependencies
 endif
 
-listobj: DIMENSIONS ${SRCDIR}/assistant/version.f local
+listobj: DIMENSIONS ${SRCDIR}/assistant/version.f local | $(OBJDIR)
 	@rm -f ${OBJDIR}/LISTOBJ ; touch ${OBJDIR}/LISTOBJ ; l="OBJS =" ; \
 	for d in `echo "$(FPATH)" | tr : \ `; do \
 		l="$$l `(cd $$d > /dev/null; echo *.f)`"; \
@@ -640,7 +642,7 @@ ${SRCDIR}/git_version_Eirene.h: force
 
 ${OBJDIR}/dependencies: ${SRCDIR}/modules/.new_modules
 	-mkdir -p ${OBJDIR}
-	touch ${OBJDIR}/dependencies
+	printf '# Dummy dependencies file for Eirene\n' > ${OBJDIR}/dependencies
 	${MAKE} -f ${SRCEIR}/config/Makefile tags
 	${MAKE} -f ${SRCEIR}/config/Makefile VERSION
 	${MAKE} -f ${SRCEIR}/config/Makefile links
@@ -648,6 +650,7 @@ ${OBJDIR}/dependencies: ${SRCDIR}/modules/.new_modules
 	${MAKE} -f ${SRCEIR}/config/Makefile listobj
 	${MAKE} -f ${SRCEIR}/config/Makefile depend
 
+$(shell [ -s ${OBJDIR}/dependencies ] || rm -f ${OBJDIR}/dependencies)
 include ${OBJDIR}/dependencies
 ifeq ($(shell [ -e ${SRCEIR}/config/dependencies.local ] && echo yes || echo no ),yes)
 include ${SRCEIR}/config/dependencies.local
@@ -690,7 +693,7 @@ ${SRCEIR}/Database/METHANE:
 ${SRCEIR}/Database/METHAN: ${SRCEIR}/Database/METHANE
 	-ln -s ${SRCEIR}/Database/METHANE ${SRCEIR}/Database/METHAN
 
-${OBJDIR}/mpiversion.mk: ${MAKES}
+${OBJDIR}/mpiversion.mk: ${MAKES} | $(OBJDIR)
 ifdef NO_MPI
 	echo 'MPI_VERSION=0' > ${OBJDIR}/mpiversion.mk
 else

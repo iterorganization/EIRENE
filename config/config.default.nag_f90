@@ -46,4 +46,3 @@ OBJDEST  = -mdir ${OBJDIR} -o ${OBJDIR}/$*.o
 #!!!Local Variables:
 #!!! mode: Makefile
 #!!! End:
-

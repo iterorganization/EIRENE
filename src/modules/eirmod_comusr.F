@@ -367,7 +367,7 @@ cdr in the same "smoothing category"
 
       REAL(DP), ALLOCATABLE, PUBLIC, SAVE :: EION(:)
 
-      LOGICAL, PUBLIC, SAVE :: COMUSR_FIRST_PASS(4)
+      LOGICAL, PUBLIC, SAVE :: COMUSR_FIRST_PASS(5)
 
 ! TYPE DEFINITIONS MOVED HERE FOR WRITING OF JSON FILE
       TYPE TEMPERATURE
@@ -544,7 +544,10 @@ cym to be evaluated
 
         IF (.NOT.ALLOCATED(LKINDM)) ALLOCATE (LKINDM(NMOL))
         IF (.NOT.ALLOCATED(LKINDI)) ALLOCATE (LKINDI(NION))
-        IF (.NOT.ALLOCATED(LKINDP)) ALLOCATE (LKINDP(NPLS))
+        IF (.NOT.ALLOCATED(LKINDP)) THEN
+          ALLOCATE (LKINDP(NPLS))
+          COMUSR_FIRST_PASS(5) = .TRUE.
+        END IF
 
 c  logicals
         ALLOCATE (LGVAC(NRAD,0:NPLS+1))
@@ -1926,7 +1929,7 @@ cdr oct 18: initialization of input volumetric tallies moved to ICAL==2
 
         LKINDM = 0
         LKINDI = 0
-        LKINDP = 0
+        IF (COMUSR_FIRST_PASS(5)) LKINDP = 0
 
         LGVAC   = .FALSE.
         LSPCCLL = .FALSE.

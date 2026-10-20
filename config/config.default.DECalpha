@@ -38,4 +38,3 @@ OBJDEST   = -o $@
 #!!!Local Variables:
 #!!! mode: Makefile
 #!!! End:
-

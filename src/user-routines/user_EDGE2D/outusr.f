@@ -35,6 +35,11 @@ C|                           assumed in the actual run. At the   |
 C|                           end of the eirene run, a new neutral|
 C|                           flux file with the current version  |
 C|                           number is generated.                |
+C| 14/09/2020   N. Horsten   Writing out if EIRENE is run in     |
+C|                           time-dependent mode (NTIME), as     |
+C|                           NSTRA and NSTS are only increased by|
+C|                           1 if EIRENE is run in time-dependent|
+C|                           mode.                               |
 C+---------------------------------------------------------------+
       subroutine EIRENE_outusr
       use eirmod_precision
@@ -43,8 +48,10 @@ C+---------------------------------------------------------------+
       use eirmod_ccona
       use eirmod_cestim
       use eirmod_ctrcei
+      use eirmod_ctext
       use eirmod_comxs
       use eirmod_cgeom
+      use eirmod_cgrid
       use eirmod_cinit
       use eirmod_ctrig
       use eirmod_csdvi
@@ -53,8 +60,15 @@ C+---------------------------------------------------------------+
       use eirmod_comprt
       use eirmod_czt1
       use eirmod_coutau
+      use eirmod_learc1, only : EIRENE_LEARC1
+      use eirmod_usrdata
+
       implicit none
       integer :: fp,mtri,ir,is
+
+      real(dp) :: dummy(1)
+      integer :: ier,idum
+      integer :: eirene_learc2
 
       real(dp) :: pa,pi,pm,pph,vvol,val,sumvol,sumval,vdenpara,bb
       integer :: j,i
@@ -75,17 +89,6 @@ csw
 
       logical, save :: ldebug
 
-      integer, save :: eirene_nbirth,eirene_njetto
-      character(len=256), save :: eirene_fbirth,eirene_ftransfer,
-     &     eirene_fstoreneutflux, eirene_felemente
-      real(dp) :: eirene_phi_offsets(9)
-      integer :: eirene_wallFluxModel ! calculation of wall fluxes for chemical sputtering
-c                = 0: no wall fluxes are used (old edge2d model)
-c                = 1: only ion fluxes are used
-c                = 2: ion fluxes and neutral fluxes from last eirene iteration are used
-c                = 3: ion and neutral fluxes are used, and EIRENE is iterated to give
-c                     converged neutral fluxes.
-      logical :: eirene_use_elstepdat_bug
       logical  :: lfound
       real(dp) :: neutralFluxFileVersion, neutralTransferFileVersion
       integer  :: ll
@@ -93,10 +96,6 @@ c                     converged neutral fluxes.
 Ccks The variable to hold the name of the eirene.surface_transfer file (="eirene.surface_transfer")
       character(len=64), save :: eirene_surface_transfer_filename
 
-Ccks The value for the outer and inner target surfaces in block 3a - NEEDS TO BE FIXED SO THAT 2 & 3
-ccks  ARE NOT HARD-WIRED
-      integer, save :: outer_target_surface_number,
-     &     inner_target_surface_number
 Ccks loop index and eirene.elemente number of triangles
       integer :: IATMsurf, ELEM_TRI_TOTAL
 Ccks  dummy variables for reading eirene.elemente
@@ -111,20 +110,14 @@ c     replicate old sputtered flux arrays sptpl, sptat, sptml, sptio, sptpht
 c     for the moment these are filled with values from sptpltot, sptatot,sptmtot,sptitot,sptphtot
 c     in the future it is better to pass particle-resolved sputtered fluxes
 c     from sptXY X=PH,I,A,M,P Y=PHT,IO,AT,ML,PL
-      real(dp),dimension(npls,nlimps)  :: sptpl
-      real(dp),dimension(natm,nlimps)  :: sptat
-      real(dp),dimension(nmol,nlimps)  :: sptml
-      real(dp),dimension(nion,nlimps)  :: sptio
-      real(dp),dimension(nphot,nlimps) :: sptpht
-      namelist /eirene_user/eirene_nbirth,eirene_njetto,
-     .                      eirene_fbirth,eirene_ftransfer,
-     .                      eirene_phi_offsets,
-     .                      eirene_fstoreneutflux,
-     .                      eirene_wallFluxModel,
-     .                      eirene_use_elstepdat_bug
+      real(dp),dimension(npls_fix,nlmpgs)  :: sptpl
+      real(dp),dimension(natm,nlmpgs)  :: sptat
+      real(dp),dimension(nmol,nlmpgs)  :: sptml
+      real(dp),dimension(nion,nlmpgs)  :: sptio
+      real(dp),dimension(nphot,nlmpgs) :: sptpht
 
       NeutralFluxFileVersion = 1.2
-      NeutralTransferFileVersion = 1.1
+      NeutralTransferFileVersion = 2.0
       ldebug=.false.
 csw
       ll=len_trim(casename)
@@ -147,8 +140,6 @@ csw
 
       eirene_surface_transfer_filename = casename(1:ll)
      &     // '.surface_transfer'
-      outer_target_surface_number = NLIM + 2
-      inner_target_surface_number = NLIM + 3
 
 !cks  Obtain the II,JJ EDGE2D to surface index correspondence from eirene.elemente
       eirene_felemente = casename(1:ll)
@@ -238,9 +229,9 @@ csw
 !cks  ERFPPHT(NPHOT), ERFPIO(NION), ERFAAT(NATM), ERFAML(NMOL), ERFMAT(NATM), ERFMML(NMOL)
 !cks  (read in EDGE2D: pf2ds/linkeirene.f in "read eirene.surface_transfer")
 
-!cks  loop over the two surfaces we are interested
-!cks  (this is hard-coded at the moment!)
-        DO k=outer_target_surface_number,inner_target_surface_number
+        DO is = 1, NSTS
+          if(surftype(is)/=TARG) cycle
+          k = NLIM + is
 !cks  loop over all triangle edges
           DO np=1,3
 !cks  loop over all triangles
@@ -315,27 +306,29 @@ csw
 
 C     fill replicated sputtered flux arrays
       sptpl(:,:) = 0.d0
-      sptpl(1,1:nlimps) = sptpltot(1:nlimps)
+      sptpl(1,1:nlmpgs) = sptpltot(1:nlmpgs)
       sptat(:,:) = 0.d0
-      sptat(1,1:nlimps) = sptatot(1:nlimps)
+      sptat(1,1:nlmpgs) = sptatot(1:nlmpgs)
       sptml(:,:) = 0.d0
-      sptml(1,1:nlimps) = sptmtot(1:nlimps)
+      sptml(1,1:nlmpgs) = sptmtot(1:nlmpgs)
       sptio(:,:) = 0.d0
-      sptio(1,1:nlimps) = sptitot(1:nlimps)
+      sptio(1,1:nlmpgs) = sptitot(1:nlmpgs)
       if (nphot > 0) then
         sptpht(:,:) = 0.d0
-        sptpht(1,1:nlimps) = sptphtot(1:nlimps)
+        sptpht(1,1:nlmpgs) = sptphtot(1:nlmpgs)
       end if
 
 csw 25oct07
-      allocate(sumpotpl(npls))
+      allocate(sumpotpl(npls_fix))
 csw
-      do k=1,npls
+      do k=1,npls_fix
          sumpotpl(k) = 0.
+         !if(nsurf==0) cycle
          do np=1,3
             do nr=1,ntrii
-                if(  inmti(np,nr) == 2+1 .or.
-     .               inmti(np,nr) == 3+1) then
+              if(inmti(np,nr)==0) cycle
+              is = inmti(np,nr) - NLIM
+              if(surftype(is)==TARG) then
                    msg = nlim+nsts+inspat(np,nr)
 
                    x1 = xtrian(necke(np,nr))
@@ -354,7 +347,7 @@ c     potpl in 1/s/cm
                    sumpotpl(k) = sumpotpl(k) +
      .                  estims(naddw(25)+k,msg)
      .                  /1.6022e-19/2.d0/pia/xc
-                endif
+              endif
             enddo
          enddo
       enddo
@@ -368,6 +361,10 @@ csw
       write(fp,'(a32,f14.6)') "* Neutral transfer file version:",
      &     NeutralTransferFileVersion
 
+cnh   Writing out if EIRENE is running in time-dependent mode
+      write(fp,'(a)') '* ntime  :'
+      write(fp,'(1x,i6)') ntime
+
       write(fp,'(a)') '* ntrii,nrad  :'
       write(fp,'(3(1x,i6))') ntrii,nrad
 
@@ -378,23 +375,21 @@ csw
       write(fp,'(4(1x,i6))') natm,nmol,nion,nphot
 
       write(fp,'(a)') '* npls:'
-      write(fp,'(3(1x,i6))') npls
+      write(fp,'(3(1x,i6))') npls_fix
 
       write(fp,'(a)') '* nlimps,nlim,nsts,nlmpgs:'
       write(fp,'(4(1x,i6))') nlimps,nlim,nsts,nlmpgs
 
 c---------------------------------------
-      ti = 0._dp
-      if (ipls == 1) ti=tiin(ipls,ir)
-      write(fp,'(a,i6)') '* BULK SPECIES NPLS = ',npls
-      do ipls=1,npls
+      write(fp,'(a,i6)') '* BULK SPECIES NPLS = ',npls_fix
+      do ipls=1,npls_fix
          ityp=4
          ISPZ=ISPEZ(ITYP,IPHOT,IATM,IMOL,IION,IPLS)
          write(fp,'(a,i6)') ' VOL.AV. IPLS = ',ipls
          do ir=1,ntrii
-            c1 = mapl(ipls,ir)
-            c2 = mmpl(ipls,ir)
-            c3 = mipl(ipls,ir)
+            c1 = mapl_vec(ipls,ir)*SIGN(1._DP,bv_vec(ipls,ir))
+            c2 = mmpl_vec(ipls,ir)*SIGN(1._DP,bv_vec(ipls,ir))
+            c3 = mipl_vec(ipls,ir)*SIGN(1._DP,bv_vec(ipls,ir))
 c            c4 = mphpl(ipls,ir)
             c4 = 0.
 C           Recombination contribution
@@ -405,6 +400,8 @@ C           Recombination contribution
                precom = precom - TABRC1(IRRC,IR)*DIIN(IPLS,IR)*ELCHA
                erecom = erecom + EELRC1(IRRC,IR)*DIIN(IPLS,IR)*ELCHA
             ENDDO
+            ti = 0d0
+            if(ipls==1) ti = tiin(ipls,ir)
 
             write(fp,'(i6,32(1x,e14.6))') ir,
      .           papl(ipls,ir),
@@ -432,7 +429,7 @@ c not used anymore... (changed background profiles in extra file?)
      .           vxin(ipls,ir),
      .           vyin(ipls,ir),
      .           vzin(ipls,ir),
-     .           bvin(ipls,ir),
+     .           bv_vec(ipls,ir),
      .           ti,
      .           edrift(ipls,ir),
 
@@ -688,7 +685,7 @@ csw 20dec07-----------------------------
           write(fp,'(2i6,20(1x,e14.6))') istra,iphot,
      .              wtotph(iphot,istra),0.
         enddo
-        do ipls=1,npls
+        do ipls=1,npls_fix
           write(fp,'(2i6,20(1x,e14.6))') istra,ipls,
      .              wtotp(ipls,istra),0.
         enddo
@@ -727,40 +724,23 @@ c     store neutral particle fluxes [A] on wall
       write(fp,'(a28,f14.6)') "* Neutral flux file version:",
      &     NeutralFluxFileVersion
       write(fp,'(a,a)') '*  NLIM,   NSTS,  NGITT, NGSTAL,',
-     &     '   NATM, NMOL, NLMPGS,  NTRII'
-      write(fp,'(8i8)') NLIM, NSTS, NGITT, NGSTAL, NATM, NMOL, NLMPGS,
+     &     '   NATM,  NMOL, NLIMPS,  NTRII'
+      write(fp,'(8i8)') NLIM, NSTS, NGITT, NGSTAL, NATM, NMOL, NLIMPS,
      &     NTRII
+
       do iatm=1,NATM
          write(fp,'(a,i0)') '* neutral fluxes from atom species ',iatm
          write(fp,'(a,a)') "*  idx,  neutral_flux, ",
      &        "SAREA, ITRIA, ISIDE, ISURF"
-         do is=1,NLMPGS
-c           find corresponding triangle
-            lfound = .false.
-            nr = 0
-            np = 0
-            do i=1,ntrii
-               do j=1,3
-                  if ((INSPAT(j,i).eq. is -(NLIM+NSTS))
-     &                 .and.(INSPAT(j,i).ne.0) ) then
-                     if (lfound) then
-                        write(iunout,*)"* EIRENE_OUTUSR:"
-                        write(iunout,*)"* Edge twice found"
-                        call EIRENE_exit_own(1)
-                     endif
-                     lfound=.true.
-                     nr = i
-                     np = j
-                  endif
-               enddo
+         do is=1,NLIMPS
+            do j= 1, surf_trian(is)%numtr
+              nr = surf_trian(is)%itrias(j)
+              np = surf_trian(is)%itrisi(j)
+              MSURFG=NLIM+NSTS+INSPAT(np,nr)
+              write(fp,'(i6,1x,2(e14.6,1x),i6,1x,i6,1x,i6)')
+     &        INSPAT(np,nr),POTAT(iatm,MSURFG),SAREA(MSURFG),
+     &        nr,np,INMTI(np,nr)
             enddo
-            if ((nr.le.0).or.(np.le.0)) then
-               write(fp,'(i6,1x,2(e14.6,1x),i6,1x,i6,1x,i6)')
-     &              is,POTAT(iatm,is),SAREA(is),nr,np,0
-            else
-               write(fp,'(i6,1x,2(e14.6,1x),i6,1x,i6,1x,i6)')
-     &              is,POTAT(iatm,is),SAREA(is),nr,np,INMTI(np,nr)
-            endif
          enddo                  !is
       enddo                     !iatm
 
@@ -769,37 +749,22 @@ c           find corresponding triangle
      &        imol
          write(fp,'(a,a)') "*  idx,  neutral_flux, ",
      &        "SAREA, ITRIA, ISIDE, ISURF"
-         do is=1,NLMPGS
-c           find corresponding triangle
-            lfound = .false.
-            nr = 0
-            np = 0
-            do i=1,ntrii
-               do j=1,3
-                  if ((INSPAT(j,i).eq. is -(NLIM+NSTS))
-     &                 .and.(INSPAT(j,i).ne.0) ) then
-                     if (lfound) then
-                        write(iunout,*)"* EIRENE_OUTUSR:"
-                        write(iunout,*)"* Edge twice found"
-                        call EIRENE_exit_own(1)
-                     endif
-                     lfound=.true.
-                     nr = i
-                     np = j
-                  endif
-               enddo
+         do is=1,NLIMPS
+            do j= 1, surf_trian(is)%numtr
+              nr = surf_trian(is)%itrias(j)
+              np = surf_trian(is)%itrisi(j)
+              MSURFG=NLIM+NSTS+INSPAT(np,nr)
+              write(fp,'(i6,1x,2(e14.6,1x),i6,1x,i6,1x,i6)')
+     &        INSPAT(np,nr),POTML(imol,MSURFG),
+     &        SAREA(MSURFG),nr,np,INMTI(np,nr)
             enddo
-            if ((nr.le.0).or.(np.le.0)) then
-               write(fp,'(i6,1x,2(e14.6,1x),i6,1x,i6,1x,i6)')
-     &              is,POTML(imol,is),SAREA(is),nr,np,0
-            else
-               write(fp,'(i6,1x,2(e14.6,1x),i6,1x,i6,1x,i6)')
-     &              is,POTML(imol,is),SAREA(is),nr,np,INMTI(np,nr)
-            endif
          enddo                  !is
       enddo                     !imol
 
       close(fp)
 
-      return
+      call eirene_dealloc_usrdata()
+      call eirene_prousr(dummy, -1, 0d0,0d0,0d0,0d0,0d0,0d0,0d0,0)
+      ! for some saved LFIRST flags
+
       end subroutine eirene_outusr

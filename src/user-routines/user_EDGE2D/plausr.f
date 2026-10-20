@@ -57,13 +57,14 @@ C+---------------------------------------------------------------+
       USE EIRMOD_COMPRT, ONLY: IUNOUT
       USE EIRMOD_CCONA
       USE EIRMOD_LEARC1, ONLY: EIRENE_LEARC1
+      USE EIRMOD_USRDATA
 
       IMPLICIT NONE
 
       REAL(DP) :: FACTOR, EIRENE_STEP
       INTEGER :: NLINES, ITRI, ISIDE, I, NBIN, ISTRA, ISRFS, ISOR, JJJ,
      .           ITEC1, ITEC2, ITEC3, ISTEP, INDSRF, IS1, IERROR, IPLS
-      INTEGER :: EIRENE_IDEZ
+      INTEGER :: EIRENE_IDEZ, MSURFG
       INTEGER, ALLOCATABLE :: KSTEP(:), INOSRC(:), IPLAN(:), IPLEN(:)
       REAL(DP) :: FLX, TE, TI, DE, MC, FE, FI, FSH, VP, FEL, ZI, DUM
       REAL(DP) :: DELR, FL, MCC, FFEL, CS, vx,vy,vz,di,usrval
@@ -75,40 +76,23 @@ C+---------------------------------------------------------------+
       CHARACTER(256) :: line,sstr,filename
       character(2) :: cstr2
       integer, allocatable :: indextmp(:),itritmp(:),isidetmp(:)
-      integer, allocatable :: isegtmp(:)
+      integer, allocatable :: isegtmp(:), offsets(:)
       real(dp), allocatable :: tetmp(:),fetmp(:),fshtmp(:)
       REAL(DP), ALLOCATABLE :: PSI_VALS(:), PSI_VALS_CORNER(:), copy(:)
 
       integer, parameter :: fp=31
       integer :: ll,ier,j,iseg,ind,fp2
-
-      integer, save :: eirene_nbirth,eirene_njetto
-      character(len=256), save :: eirene_fbirth,eirene_ftransfer,
-     &     eirene_fstoreneutflux
-      real(dp) :: eirene_phi_offsets(9)
+      integer :: ftell
 
       integer :: ntr, NLIM_tmp, NSTS_tmp, NGITT_tmp, NGSTAL_tmp,
-     &     NATM_tmp, NMOL_tmp, IPLS_tmp, NTR_tmp, NLMPGS_tmp
+     &     NATM_tmp, NMOL_tmp, IPLS_tmp, NTR_tmp, NLIMPS_tmp, ISTEP_SPEZ
       REAL(DP),ALLOCATABLE,DIMENSION(:,:) :: hydIonFLX, EIRENE_wall_area
       REAL(DP),ALLOCATABLE,DIMENSION(:)   :: hydNeutFLX
       INTEGER, ALLOCATABLE,DIMENSION(:,:) :: hydNeutFLX_info
       logical :: lex,dbg_out
-      real(dp):: leng, twopi, tmp
-      integer :: eirene_wallFluxModel ! calculation of wall fluxes for chemical sputtering
-c                = 0: no wall fluxes are used (old edge2d model)
-c                = 1: only ion fluxes are used
-c                = 2: ion fluxes and neutral fluxes from last eirene iteration are used
-c                = 3: ion and neutral fluxes are used, and EIRENE is iterated to give
-c                     converged neutral fluxes.
-      logical :: eirene_use_elstepdat_bug
-      real(dp) :: neutralFluxFileVersion
+      real(dp):: leng, tmp
 
-      namelist /eirene_user/eirene_nbirth,eirene_njetto,
-     .                      eirene_fbirth,eirene_ftransfer,
-     .                      eirene_phi_offsets,
-     .                      eirene_fstoreneutflux,
-     .                      eirene_wallFluxModel,
-     .                      eirene_use_elstepdat_bug
+      real(dp) :: neutralFluxFileVersion
 
       interface
         subroutine EIRENE_cell_to_corner (f, fcorner)
@@ -139,27 +123,14 @@ c                     converged neutral fluxes.
       IPLAN = 0
       IPLEN = 0
 
-      dbg_out=.true.
-
-c     set default namelist values
-      eirene_ftransfer = 'eirene.transfer'
-      eirene_njetto=0
-cdmh
-      eirene_fstoreneutflux = 'eirene.chemFluxDep'
-      eirene_wallFluxModel = 1
+      dbg_out=.false.
       NeutralFluxFileVersion = 1.2_DP
-cdmh
-
-c     get namelist config
-      open(unit=9998,file='eirene_user.namelist')
-      read(9998,eirene_user)
-      close(9998)
 
 c begin dmh added 21.06.2010
       ll=len_trim(casename)
 !
       filename=casename(1:ll) // '.zplasma'
-      open (unit=fp+ifoff,file=filename,access='sequential',
+      open (unit=fp+ifoff,file=filename,access='stream',
      .     form='formatted')
 
 c first get number of triangles from misc plasma data:
@@ -221,6 +192,7 @@ cswx
       allocate(fetmp(nlines))
       allocate(fshtmp(nlines))
       allocate(isegtmp(nlines))
+      allocate(offsets(npls_fix))
       do j=1,nlines
          read(fp+ifoff,'(3i7,3(1x,e14.7))')
      .        indextmp(j),
@@ -230,6 +202,23 @@ cswx
      .        fetmp(j),
      .        fshtmp(j)
          isegtmp(indextmp(j)) = j
+      enddo
+      ! scan to find offsets of ions strata data
+
+      do ipls = 1, npls_fix
+        write(cstr2,'(i2.2)') ipls
+        write(sstr,'(a23)')
+     .        '*** ION #'//cstr2//' TARGET DATA'
+        CALL EIRENE_locstr_usr(fp+ifoff,sstr,ier)
+        if(ier /=0) then
+            write(*,*) 'PLAUSR: tag ',sstr,'not found'
+            close(fp+ifoff)
+            call EIRENE_exit_own(1)
+        endif
+        do j=1,2
+            read(fp+ifoff,'(a)') line
+        enddo
+        inquire(unit=fp+ifoff, pos=offsets(ipls))
       enddo
 
 
@@ -245,15 +234,20 @@ c     get step function index ISTEP
             ITEC3=EIRENE_IDEZ(ISOR,3,4)
             IF ((ITEC1 /= 4).AND.(ITEC2 /= 4).AND.(ITEC3 /= 4)) CYCLE
             ISTEP=SORIND(ISRFS,ISTRA)
+            ISTEP=MOD(NINT(SORIND(ISRFS,ISTRA)),100)
+            ISTEP_SPEZ=INT(SORIND(ISRFS,ISTRA) /100)
+            IF(ISTEP_SPEZ==0) ISTEP_SPEZ = nspez(istra)
             IF (ISTEP.EQ.0) THEN
-               WRITE (*,*) 'ERROR IN PRIMARY SOURCE DATA '
-               WRITE (*,*) 'STEPFUNCTION REQUESTED FOR SOURCE SURFACE '
-               WRITE (*,*) 'NO. ',INSOR(ISRFS,ISTRA),' BUT SORIND.EQ.0.'
-               CALL EIRENE_EXIT_own(1)
+              WRITE (*,*) 'ERROR IN PRIMARY SOURCE DATA '
+              WRITE (*,*) 'STEPFUNCTION REQUESTED FOR SOURCE SURFACE '
+              WRITE (*,*) 'NO. ',INSOR(ISRFS,ISTRA),' BUT SORIND.EQ.0.'
+              CALL EIRENE_EXIT_own(1)
             ELSEIF (ISTEP.GT.NSTEP) THEN
-               CALL EIRENE_MASPRM('NSTEP',5,NSTEP,'ISTEP',5,ISTEP,IERROR)
-               CALL EIRENE_EXIT_own(1)
+              CALL EIRENE_MASPRM('NSTEP',5,NSTEP,'ISTEP',5,ISTEP,IERROR)
+              CALL EIRENE_EXIT_own(1)
             ENDIF
+c     initialise stratum strength
+            IF(ISRFS==1) FLUX(ISTRA) = 0.0_DP
 
 c     get surface index INDSRF
             INDSRF=INSOR(ISRFS,ISTRA)
@@ -262,37 +256,29 @@ c     get surface index INDSRF
 c     get species index/indices IPLAN(ISTEP) --> IPLEN(ISTEP)
             IF (NSPEZ(ISTRA) <= 0) THEN
                IPLAN(ISTEP)=1
-               IPLEN(ISTEP)=NPLSI
+               IPLEN(ISTEP)=npls_fix
                ipls = 0
             ELSE
                IPLAN(ISTEP)=NSPEZ(ISTRA)
                IPLEN(ISTEP)=NSPEZ(ISTRA)
-               ipls=nspez(istra)
+               IPLAN(ISTEP)=ISTEP_SPEZ
+               IPLEN(ISTEP)=ISTEP_SPEZ
+               ipls=ISTEP_SPEZ
             END IF
 c     fudge species index for atomic impurity flux (get it from NEMODS index K)
             IF (NLATM(ISTRA)) THEN
-               IPLS_tmp = EIRENE_IDEZ(NEMODS(ISTRA),4,4)
-               IF (IPLS_tmp.gt.0) then
-                  ipls=IPLS_tmp
-               ENDIF
+              IPLS_tmp = EIRENE_IDEZ(NEMODS(ISTRA),4,4)
+              IF (IPLS_tmp.gt.0) then
+                ipls=IPLS_tmp
+              ENDIF
             ENDIF
 c     search target tag in .zplasma file
            IPLS_tmp = IPLS
-           write(cstr2,'(i2.2)') ipls
-           write(sstr,'(a23)')
-     .          '*** ION #'//cstr2//' TARGET DATA'
-           CALL EIRENE_locstr_usr(fp+ifoff,sstr,ier)
-           if(ier /=0) then
-              write(*,*) 'PROUSR: tag ',sstr,'not found'
-              close(fp+ifoff)
-              call EIRENE_exit_own(1)
-           endif
-           do j=1,2
-              read(fp+ifoff,'(a)') line
-           enddo
+           rewind(fp+ifoff)
 
 c     read step functions
-            READ (fp+ifoff,*) NLINES
+            KSTEP(ISTEP) = 0
+            READ (fp+ifoff,*,pos=offsets(ipls)) NLINES
             DO I=1, NLINES
                read(fp+ifoff,'(i7,12(1x,e14.7))')
      .              ind,
@@ -363,6 +349,7 @@ c                     VXSTEP(IPLS,ISTEP,KSTEP(ISTEP)) = VX
 c                     VYSTEP(IPLS,ISTEP,KSTEP(ISTEP)) = VY
 c                     VZSTEP(IPLS,ISTEP,KSTEP(ISTEP)) = VZ
                      FLSTEP(IPLS,ISTEP,KSTEP(ISTEP)) = ABS(FLX)/DELR
+                     FLUX(ISTRA) = FLUX(ISTRA) + ABS(FLX)
 C     IF NO ION KINETIC ENERGY FLUX IS SPECIFIED, DERIVE IT FROM  FI,MC,VP
                      ffel=0.0_DP
                      IF (FI.gt.0.0_DP.or.mc.gt.0.0_DP) then
@@ -398,29 +385,29 @@ c              endif inmti
 
 c           enddo nlines
             ENDDO
-
 c        enddo isrfs
          ENDDO
-
 c     enddo istra
       ENDDO
 
 
 
       DO ISTEP = 1, NSTEP
+         FL=0.0_DP
          IF (KSTEP(ISTEP) > 0) THEN
             NBIN=KSTEP(ISTEP)+1
+            IPLAN(ISTEP) = 1
+            IPLEN(ISTEP) = npls_fix
             FL=EIRENE_STEP(IPLAN(ISTEP),IPLEN(ISTEP),NBIN,ISTEP,4)
-            FLUX(INOSRC(ISTEP))=FL
          END IF
       END DO
 
 c begin added dmh 21.06.2010 for flux dependency of chemical sputtering
 c     read neutral flux [A] to target and walls from last EIRENE run
 
-      allocate(hydNeutFLX(NLMPGS))
+      allocate(hydNeutFLX(NGITT))
       hydNeutFLX(:) = 0.0_DP
-      allocate(hydNeutFLX_info(NLMPGS,3))
+      allocate(hydNeutFLX_info(NGITT,3))
       hydNeutFLX_info = 0
       NLIM_tmp   = NLIM
       NSTS_tmp   = NSTS
@@ -428,11 +415,11 @@ c     read neutral flux [A] to target and walls from last EIRENE run
       NGSTAL_tmp = NGSTAL
       NATM_tmp   = NATM
       NMOL_tmp   = NMOL
-      NLMPGS_tmp = NLMPGS
+      NLIMPS_tmp = NLIMPS
       NTR_tmp    = NTR
       fp2 = 4999
       inquire(file=trim(eirene_fstoreneutflux),exist=lex)
-      if (lex) then
+      if (eirene_wallFluxModel.ge.2.and.lex) then
           open(unit=fp2,file=trim(eirene_fstoreneutflux),
      &        access='sequential')
          read(fp2,'(a)') line
@@ -463,8 +450,8 @@ c        check if netral flux file is compatible with actual code version
 c              neutral flux file is compatible with actual code version, so read it
                read(fp2,'(a)') line
                read(fp2,'(8i8)') NLIM_tmp, NSTS_tmp, NGITT_tmp,
-     &              NGSTAL_tmp, NATM_tmp, NMOL_tmp, NLMPGS_tmp, NTR_tmp
-               if ((NLMPGS_tmp-NLIM_tmp-NSTS_tmp.ne.NLMPGS-NLIM-NSTS)
+     &              NGSTAL_tmp, NATM_tmp, NMOL_tmp, NLIMPS_tmp, NTR_tmp
+               if ((NLIMPS_tmp-NLIM_tmp-NSTS_tmp.ne.NLIMPS-NLIM-NSTS)
      &              .or.(NSTS_tmp.ne.NSTS).or.(NTR_tmp.ne.NTR).or.
      &              (NGITT_tmp.ne.NGITT).or.(NGSTAL_tmp.ne.NGSTAL)) then
                   WRITE(IUNOUT,*) "* EIRENE_PLAUSR: Warning"
@@ -480,9 +467,9 @@ c              neutral flux file is compatible with actual code version, so read
                   WRITE(IUNOUT,*)"NATM = ",NATM,"; NATM_tmp = ",NATM_tmp
                   WRITE(IUNOUT,*)"NMOL = ",NMOL,"; NMOL_tmp = ",NMOL_tmp
                   WRITE(IUNOUT,*)"NTRII= ",NTR,"; NTRII_tmp = ",NTR_tmp
-                  WRITE(IUNOUT,*)"NLMPGS_tmp-NLIM_tmp-NSTS_tmp = ",
-     &                 NLMPGS_tmp-NLIM_tmp-NSTS_tmp,
-     &                 "NLMPGS-NLIM-NSTS = ",NLMPGS-NLIM-NSTS
+                  WRITE(IUNOUT,*)"NLIMPS_tmp-NLIM_tmp-NSTS_tmp = ",
+     &                 NLIMPS_tmp-NLIM_tmp-NSTS_tmp,
+     &                 "NLIMPS-NLIM-NSTS = ",NLIMPS-NLIM-NSTS
                   write(IUNOUT,*)
      &                 "Ignoring neutral flux from previous run"
                   WRITE(IUNOUT,*) "* EIRENE_PLAUSR: Warning end"
@@ -490,136 +477,89 @@ c              neutral flux file is compatible with actual code version, so read
                endif
 
                if (lex) then
-                  deallocate(hydNeutFLX, hydNeutFLX_info)
-                  allocate(hydNeutFLX(NLMPGS_tmp))
-                  hydNeutFLX(:) = 0.0
-                  allocate(hydNeutFLX_info(NLMPGS_tmp,3))
-                  hydNeutFLX_info = 0
+                  read(fp2,'(a)') line
+                  read(fp2,'(a)') line
+                  do ISRFS=1,NLIMPS
+                    do i= 1, surf_trian(ISRFS)%numtr
+                      itri = surf_trian(ISRFS)%itrias(i)
+                      iside = surf_trian(ISRFS)%itrisi(i)
 
-                  read(fp2,'(a)') line
-                  read(fp2,'(a)') line
-                  do i=1,NLMPGS_tmp
-                     read(fp2,'(i6,1x,2(e14.6,1x),i6,1x,i6,1x,i6)')
-     &                    j, hydNeutFLX(i), tmp,
-     &                    hydNeutFLX_info(i,1), hydNeutFLX_info(i,2),
-     &                    hydNeutFLX_info(i,3)
-                     if (i.ne.j) then
+                      read(fp2,'(i6,1x,2(e14.6,1x),i6,1x,i6,1x,i6)')
+     &                    j, hydNeutFLX(j), tmp,
+     &                    hydNeutFLX_info(j,1), hydNeutFLX_info(j,2),
+     &                    hydNeutFLX_info(j,3)
+                     if (INSPAT(iside,itri).ne.j) then
                         WRITE(IUNOUT,*) "* EIRENE_PLAUSR:"
                         write(IUNOUT,*) "Error reading from file: ",
      &                       trim(eirene_fstoreneutflux)
-                        write(IUNOUT,*) "i = ",i,";  in file j = ",j
+                        write(IUNOUT,*) "INSPAT=",INSPAT(iside,itri),
+     &                                  ";  in file j = ",j
                         CALL EIRENE_EXIT_own(1)
                      endif
-                  enddo         !i
+                   enddo        ! isrfs
+                 enddo          ! i
                endif            !(lex)
             endif               !(tmp.ne.NeutralFluxFileVersion)
          endif                  !(index(sstr,"* Neutral flux file version:").ne.1)
          close(fp2)
       endif
 
-c     calculate area of wall surface elements
-      twopi = 2.d0*dabs(dacos(-1.d0))
-      do itri=1,ntr
-         do iside=1,3
+c     calculate target flux for chemical sputtering of Roth-formula
+      FLXOUT(:) = 0.0_DP
+
+c     use hydrogen ion flux [A] to wall
+c     FLXOUT is needed in #/(cm^2 s) (convert from A to #/(cm^2 s))
+      if (eirene_wallFluxModel.ge.1) then
+        do ISRFS=1,NLIMPS
+          do i= 1, surf_trian(ISRFS)%numtr
+            itri = surf_trian(ISRFS)%itrias(i)
+            iside = surf_trian(ISRFS)%itrisi(i)
             IS1 = ISIDE + 1
             IF (IS1.GT.3) IS1=1
             leng  = SQRT(
-     .           (XTRIAN(NECKE(ISIDE,ITRI))
-     .           -XTRIAN(NECKE(IS1,ITRI)))**2+
-     .           (YTRIAN(NECKE(ISIDE,ITRI))
-     .           -YTRIAN(NECKE(IS1,ITRI)))**2)
-            EIRENE_wall_area(iside,itri) = twopi*leng
-     &           *( XTRIAN(NECKE(ISIDE,ITRI))
-     &           +  XTRIAN(NECKE(IS1,ITRI)) )/2.D0
-         enddo                  ! iside
-      enddo                     ! itri
-
-c     calculate target flux for chemical sputtering of Roth-formula
-      FLXOUT(:) = 0.0
-
-      if (eirene_wallFluxModel.ge.1) then
-c     use hydrogen ion flux [A] to wall
-         do itri=1,ntr
-            do iside=1,3
-               if ( (hydIonFLX(iside,itri).ne.0)
-     &              .and.(INMTI(iside,itri).ne.0) ) then
-                  FLXOUT(NLIM+NSTS + INSPAT(iside,itri)) =
-     &                 FLXOUT(NLIM+NSTS + INSPAT(iside,itri))
-     &                 + DABS(hydIonFLX(iside,itri))
-               endif
-            enddo               ! iside
-         enddo                  ! itri
+     .             (XTRIAN(NECKE(ISIDE,ITRI))
+     .             -XTRIAN(NECKE(IS1,ITRI)))**2+
+     .             (YTRIAN(NECKE(ISIDE,ITRI))
+     .             -YTRIAN(NECKE(IS1,ITRI)))**2)
+            EIRENE_wall_area(iside,itri) = PIA*leng
+     &             *( XTRIAN(NECKE(ISIDE,ITRI))
+     &             +  XTRIAN(NECKE(IS1,ITRI)) )
+            if (hydIonFLX(iside,itri).eq.0) cycle
+            MSURFG=NLIM+NSTS+INSPAT(iside,itri)
+            FLXOUT(MSURFG) = FLXOUT(MSURFG)+DABS(hydIonFLX(iside,itri))
+     &              /(1.6022D-19*EIRENE_wall_area(iside,itri))
+          enddo               ! iside
+        enddo                  ! itri
       endif
 
       if ((eirene_wallFluxModel.ge.2).and.lex) then
 c     use hydrogen neutral flux [A] to wall
-         do i=NLIM_tmp+NSTS_tmp+1,NLMPGS_tmp
-            j = i-NLIM_tmp-NSTS_tmp+NLIM+NSTS
-            if (hydNeutFLX(i).ne.0) then
-               if (hydNeutFLX_info(i,1).ne.0) then
-                  lex=.false.
-                  do itri=1,ntr
-                     do iside=1,3
-                        if ((INSPAT(iside,itri).eq. j -(NLIM+NSTS))
-     &                       .and.(INSPAT(iside,itri).ne.0) ) then
-                           if (lex) then
-                              WRITE(IUNOUT,*) "* EIRENE_PLAUSR:"
-                              write(IUNOUT,*) "* Edge twice found"
-                              CALL EIRENE_EXIT_own(1)
-                           endif
-                           lex=.true.
-
-                           if  ((itri .eq. hydNeutFLX_info(i,1)).or.
-     &                          (iside .eq. hydNeutFLX_info(i,2)).or.
-     &                          (INMTI(iside,itri)-NLIM-NSTS.eq.
-     &                          hydNeutFLX_info(i,3)-NLIM_tmp-NSTS_tmp))
-     &                          then
-                              FLXOUT(j) = FLXOUT(j)
-     &                             + DABS(hydNeutFLX(i))
-                           else
-                              WRITE(IUNOUT,*) "* EIRENE_PLAUSR:"
-                              write(IUNOUT,*)
-     &                             "Neutral flux from previous run ",
-     &                             "is not associated with the same ",
-     &                             "triangle in this run"
-                              write(IUNOUT,*) "itri_old = ",
-     &                             hydNeutFLX_info(i,1),
-     &                             "; itri_new = ",itri
-                              write(IUNOUT,*) "iside_old = ",
-     &                             hydNeutFLX_info(i,2),
-     &                             "; iside_new = ",iside
-                              write(IUNOUT,*) "isurf_old = ",
-     &                             hydNeutFLX_info(i,3),
-     &                             "; isurf_new = ",itri
-                              CALL EIRENE_EXIT_own(1)
-                           endif ! same triangle associated
-                        endif   ! triangle found
-                     enddo      ! iside
-                  enddo         ! itri
-               else
-                  WRITE(IUNOUT,*) "* EIRENE_PLAUSR:"
-                  write(IUNOUT,*)
-     &                 "* No triangle associated with neutral flux"
-                  CALL EIRENE_EXIT_own(1)
-               endif            ! hydNeutFLX_info(i).ne.0
-            endif               ! hydNeutFLX(i).ne.0
+         do i = 1, NGITT
+            if (hydNeutFLX(i).eq.0) cycle
+            if (hydNeutFLX_info(i,1).eq.0) cycle
+            itri  = hydNeutFLX_info(i,1)
+            iside = hydNeutFLX_info(i,2)
+            MSURFG=NLIM+NSTS+INSPAT(iside,itri)
+            FLXOUT(MSURFG) = FLXOUT(MSURFG) + DABS(hydNeutFLX(i))
+     &              /(1.6022D-19*EIRENE_wall_area(iside,itri))
          enddo                  ! i
       endif
+
+c end added dmh 21.06.2010 for flux dependency of chemical sputtering
 
 c     Debug output of boundary
       if (dbg_out) then
       open(unit=fp2, file="eirene.chemSput_dbgOut",access='sequential')
-      write(fp2,*) NLMPGS
+      write(fp2,*) NLIMPS_tmp
       write(fp2,'(a,a,a)')
      &     "* index, nsurf,           R1,           R2,",
      &     "           Z1,           Z2,       FLXOUT,",
      &     "      NeutFLX,       IonFLX,         area"
-      do i=1,NLMPGS
+      do i=1,NGITT
          lex=.false.
          do itri=1,ntr
             do iside=1,3
-               if ((INSPAT(iside,itri).eq. i -(NLIM+NSTS))
-     &              .and.(INSPAT(iside,itri).ne.0) ) then
+               if (INSPAT(iside,itri).eq.i) then
                   if (lex) write(fp2,*)"*Edge twice found"
                   lex=.true.
                   IS1 = ISIDE + 1
@@ -666,28 +606,13 @@ c     Debug output of boundary
          enddo
       enddo
       close(fp2)
-      endif
-
-c     FLXOUT is needed in #/(cm^2 s) (covert from A to #/(cm^2 s))
-      do itri=1,ntr
-         do iside=1,3
-            if (INMTI(iside,itri).ne.0) then
-               FLXOUT(NLIM+NSTS + INSPAT(iside,itri)) =
-     &              FLXOUT(NLIM+NSTS + INSPAT(iside,itri))
-     &              /(1.6022D-19*EIRENE_wall_area(iside,itri))
-            endif
-         enddo                  ! iside
-      enddo                     ! itri
-
-c end added dmh 21.06.2010 for flux dependency of chemical sputtering
 
 c dmh begin added output of step function data
-      if (dbg_out) then
       open(unit=fp2, file="eirene.stepdat_dbg",access='sequential')
       write(fp2,"(A,A,A)") "ipls istep i  IRSTEP(ITRI)  IPSTEP(ISIDE)",
      &     "  X1   Y1  DR  FLSTEP  ELSTEP  SHSTEP  TISTEP",
      &     "  TESTEP"
-      do ipls=1,npls
+      do ipls=1,npls_fix
          do istep=1,nstep
             do i=1,KSTEP(ISTEP)
                ITRI = IRSTEP(ISTEP,I)
@@ -716,6 +641,8 @@ c dmh begin added output of step function data
       endif
 c dmh begin added output of step function data
 
+      deallocate(hydNeutFLX)
+      deallocate(hydNeutFLX_info)
 
 c     cleanup
       DEALLOCATE (KSTEP)
@@ -730,169 +657,11 @@ c     cleanup
       deallocate(fshtmp)
       deallocate(isegtmp)
       deallocate(hydIonFLX)
-      deallocate(hydNeutFLX)
-      deallocate(hydNeutFLX_info)
       deallocate(EIRENE_wall_area)
+      deallocate(offsets)
 
       close(fp+ifoff)
 
       return
-!pb      return
- 4711 continue
 
-      if (nain < 1) then
-         write (iunout,*) ' no additional input tally available '
-         write (iunout,*) ' for PSI-function'
-         write (iunout,*) ' calculation of B field from PSI function'
-         write (iunout,*) ' abandoned '
-         return
-      end if
-
-      ALLOCATE (PSI_VALS(NRAD))
-      ALLOCATE (PSI_VALS_CORNER(NRAD))
-      ALLOCATE (COPY(NRAD))
-      PSI_VALS=0.
-      PSI_VALS_CORNER=0.
-      COPY=0._dp
-
-      if (naini >= 8) then
-        call EIRENE_prousr(copy,1+1*npls+NPLSTI+3*NPLSV,0._dp,0._dp,
-     .        0._dp,0._dp,0._dp,0._dp,0._dp,nsbox)
-        adin(7,1:nsbox) = copy(1:nsbox)
-
-        call EIRENE_prousr(copy,2+1*npls+NPLSTI+3*NPLSV,0._dp,0._dp,
-     .       0._dp,0._dp,0._dp,0._dp,0._dp,nsbox)
-        adin(8,1:nsbox) = copy(1:nsbox)
-      end if
-
-      call EIRENE_prousr(psi_vals,11+1*npls+NPLSTI+3*NPLSV,0._dp,0._dp,
-     .     0._dp,0._dp,0._dp,0._dp,0._dp,nsbox)
-
-      psi_vals(1:nsbox) = psi_vals(1:nsbox) * 1.e4_dp
-
-      adin(1,1:nsbox) = psi_vals(1:nsbox)
-
-      call EIRENE_cell_to_corner (psi_vals, psi_vals_corner)
-
-      xref = 200._dp
-      yref = 0._dp
-      NREF=EIRENE_LEARC1(XREF,YREF,0._DP,IPOLG,1,NR1STM,
-     .     .FALSE.,.FALSE.,1,'PLAUSR      ')
-      BZREF=BZIN(NREF)*BFIN(NREF)
-      FACBZ=xcom(nref)*BZREF
-
-      write (iunout,*) ' xref,  yref,  bzref,  facbz ',
-     .                   xref,  yref,  bzref,  facbz
-
-      xref2= 380._dp
-      yref2 = 0._dp
-      NREF2=EIRENE_LEARC1(XREF2,YREF2,0._DP,IPOLG,1,NR1STM,
-     .     .FALSE.,.FALSE.,1,'PLAUSR      ')
-      BZREF2=BZIN(NREF2)*BFIN(NREF2)
-      FACBZ2=xcom(nref2)*BZREF2
-
-      write (iunout,*) ' xref2, yref2, bzref2, facbz2 ',
-     .                   xref2, yref2, bzref2, facbz2
-
-      xref3= 250._dp
-      yref3 = 150._dp
-      NREF3=EIRENE_LEARC1(XREF3,YREF3,0._DP,IPOLG,1,NR1STM,
-     .     .FALSE.,.FALSE.,1,'PLAUSR      ')
-      BZREF3=BZIN(NREF3)*BFIN(NREF3)
-      FACBZ3=xcom(nref3)*BZREF3
-
-      write (iunout,*) ' xref3, yref3, bzref3, facbz3 ',
-     .                   xref3, yref3, bzref3, facbz3
-
-      errbx = 0._dp
-      errby = 0._dp
-      errbz = 0._dp
-      errbf = 0._dp
-      bxmax = 0._dp
-      bymax = 0._dp
-      bzmax = 0._dp
-      bfmax = 0._dp
-      nplcll = 0
-
-      do icell = 1, ntrii
-        x = xcom(icell)
-        y = ycom(icell)
-        rad = x
-        call EIRENE_df_dxyz (psi_vals_corner, icell, x, y,
-     &       0._dp, dfdx, dfdy, dfdz)
-
-        bx = -dfdy / rad
-        by =  dfdx / rad
-        bz = facbz / rad
-        bf = sqrt(bx*bx + by*by + bz*bz)
-
-        if (naini >= 6) then
-        adin(3,icell) = bx
-        adin(4,icell) = by
-        adin(5,icell) = bz
-        adin(6,icell) = bf
-
-        else
-
-        bx = bx / bf
-        by = by / bf
-        bz = bz / bf
-        if (ixtri(icell)+iytri(icell) == 0) then
-! outside plasma region: set b-field
-          bxin(icell) = bx
-          byin(icell) = by
-          bzin(icell) = bz
-          bfin(icell) = bf
-        else
-          nplcll = nplcll + 1
-          bxmax = max(bxmax, abs(bxin(icell)))
-          bymax = max(bymax, abs(byin(icell)))
-          bzmax = max(bzmax, abs(bzin(icell)))
-          bfmax = max(bfmax, abs(bfin(icell)))
-
-          errbx = errbx + abs(bx-bxin(icell))
-          errby = errby + abs(by-byin(icell))
-          errbz = errbz + abs(bz-bzin(icell))
-          errbf = errbf + abs(bf-bfin(icell))
-          if (icell == nref) then
-            write (iunout,*) ' reference cell ',nref
-            write (iunout,*) ' bxin, byin, bzin, bfin ',
-     .             bxin(icell), byin(icell), bzin(icell), bfin(icell)
-            write (iunout,*) ' bx,   by,   bz,   bf   ',
-     .             bx, by, bz, bf
-          elseif (icell == nref2) then
-            write (iunout,*) ' reference cell ',nref2
-            write (iunout,*) ' bxin, byin, bzin, bfin ',
-     .             bxin(icell), byin(icell), bzin(icell), bfin(icell)
-            write (iunout,*) ' bx,   by,   bz,   bf   ',
-     .             bx, by, bz, bf
-          elseif (icell == nref3) then
-            write (iunout,*) ' reference cell ',nref3
-            write (iunout,*) ' bxin, byin, bzin, bfin ',
-     .             bxin(icell), byin(icell), bzin(icell), bfin(icell)
-            write (iunout,*) ' bx,   by,   bz,   bf   ',
-     .             bx, by, bz, bf
-          end if
-        end if
-        end if
-
-      end do
-
-      adin(2,1:nsbox) = bzin(1:nsbox) * bfin(1:nsbox)
-
-      if (.false.) then
-      errbx = errbx / nplcll
-      errby = errby / nplcll
-      errbz = errbz / nplcll
-      errbf = errbf / nplcll
-
-      write (iunout,*) ' no of cell in plasma region ', nplcll
-      write (iunout,*) ' errbx, errby, errbz, errbf ',
-     .                   errbx, errby, errbz, errbf
-
-      write (iunout,*) ' bxmax, bymax, bzmax, bfmax ',
-     .                   bxmax, bymax, bzmax, bfmax
-      end if
-
-   99 RETURN
       END SUBROUTINE EIRENE_PLAUSR

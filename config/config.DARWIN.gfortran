@@ -26,7 +26,7 @@ endif
 endif
 
 #LDLIBS   = -L/usr/local/lib -L/usr/X11R6/lib
-LDLIBS    = -L/usr/local/lib -L$(XQUARTZ_HOME)/lib
+LDLIBS    = -L$(shell brew --prefix)/lib -L$(XQUARTZ_HOME)/lib
 
 INCMOD    = -B
 
