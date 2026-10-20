@@ -56,7 +56,8 @@ c  do we have external components for CR matrix ICRM
       integer, save :: icr_dim(maxcrm) = (/ 40, 1, 1, 65 /)
 
       real(dp) :: ALPCR, SCR, SCR_EXT,  ALP_EXT, 
-     .            E_ALPCR, E_SCR, E_SCR_EXT, E_ALP_EXT
+     .            E_ALPCR, E_SCR, E_SCR_EXT, E_ALP_EXT,
+     .            E_ALPCR_T, E_SCR_T, E_SCR_EXT_T
 
       CONTAINS
 
@@ -114,11 +115,11 @@ cdr singlet-triplet mixing in He  CR code requires local B-field strength (T)
       real(dp), intent(in), optional  :: p1, p2
       real(dp), intent(out) :: res
 
-ctt   real(dp) :: E_ALPCR_T, E_SCR_T, E_SCR_EXT_T   these arrays are for testing only
-      real(dp), save, allocatable :: q_ext(:)
+      real(dp) :: E_ALPCR_T, E_SCR_T, E_SCR_EXT_T   these arrays are for testing only
+      real(dp), allocatable :: q_ext(:)
       real(dp) :: mfield
       real(dp), save :: sum2=0.0, sum3=0.0, sumsrc=0.0, sumalp=0.0
-      logical, save  :: l_ext
+      logical  :: l_ext
 
       integer :: i, nesc, irow_esc, icol_esc, irc, ipop, jcrm,
      .           ipe, nstor_crm, next, irow_ext, jpls
@@ -262,15 +263,15 @@ cdr here set one or more external contributions for parameters p1,p2
 
           L_EXT = CR(ICRM)%L_EXT
 
-c         write (iunout,*) 'COLRAD icrm,icell ',icrm,icell
+c          write (iunout,*) 'COLRAD icrm,icell ',icrm,icell
           if (l_ext) then
             q_ext(:) = CR(ICRM)%Q_EXT(:,icell)
             if (any(q_ext(:) .ne. 0._dp)) then
-ctt           write (iunout,*) 'icrm incell icell ',icell,q_ext(2),
-ctt  .                                              q_ext(3) 
+c           write (iunout,*) 'icrm incell icell ',icell,q_ext(2),
+c     .                                              q_ext(3)
               sum2=sum2+q_ext(2)
               sum3=sum3+q_ext(3)
-            else
+           else
 c   no external source set for this particular cell           
               l_ext=.false.
             endif 
@@ -285,8 +286,8 @@ c
 cdr  in case of He_colrad: these next output parameters are handled via module EIRMOD_HECR.
      .                         POP0, POP1, POP_EXT,                     ! out: reduced population coefficients
      .                         ALPCR,    SCR,    SCR_EXT, ALP_EXT,      ! out: effective rates
-     .                         E_ALPCR,  E_SCR,  E_SCR_EXT, E_ALP_EXT)  ! out: effective energy rates
-ctt  .                         E_ALPCR_T,E_SCR_T,E_SCR_EXT_T            ! for testing only
+     .                         E_ALPCR,  E_SCR,  E_SCR_EXT, E_ALP_EXT,  ! out: effective energy rates
+     .                         E_ALPCR_T,E_SCR_T,E_SCR_EXT_T)           ! for testing only
 
 cdr keep atomic structure data: einstein coeff, energy levels, stat weights
 cdr should be needed from CR-code ICRM only once, from first call.
@@ -305,7 +306,9 @@ cdr should be needed from CR-code ICRM only once, from first call.
           if (l_ext) then
             sumsrc=sumsrc+scr_ext
             sumalp=sumalp+alp_ext
-ctt         write (iunout,*) ' test ',sum2+sum3,sumalp+sumsrc
+c          write (iunout,'(A,1X,2(1PE12.4))') ' test ',e_scr,e_scr_t
+c          write (iunout,'(A,1X,2(1PE12.4))') ' test ph',e_scr_ext
+c     .     ,e_scr_ext_t
           endif 
           call eirene_store_H_colrad_results(icrm,icell,iform)
 
@@ -396,13 +399,14 @@ cdr  IC_EXT: counter for non-vanishing external sources on grid.
       use EIRMOD_coutau, only: eirene_fetch_outau, eirene_fetch_outaui
       use EIRMOD_comprt, only: iunout
       use EIRMOD_comxs, only: iftflg
-      USE EIRMOD_CGRID, ONLY : NSBOX_TAL
       USE EIRMOD_CCONA, ONLY : ELCHA,EPS60
+      USE eirmod_cgrid, ONLY: NSBOX_TAL
+      use eirmod_cgeom, only: NCLTAL
 
       integer, intent(in) :: icrm, ndim, irc
       TYPE(FIT_FORMS),POINTER :: RP   !  --> reacdat(irc)%xxx%   with xxx=rtc, rtcew, oth
       character(4) :: csw
-      integer :: nesc, ipe, irow_esc, icol_esc, ic_esc, icell
+      integer :: nesc, ipe, irow_esc, icol_esc, ic_esc, icell, i
       integer :: next, irow, ic_ext, isp, itl, ist, ispa
       real(dp) :: tallyi, tally(nrad) !  setting one cell at a time 
       
@@ -440,7 +444,7 @@ cdr  set cr(icrm)...%q_ext from photonic excitation
           isp = rp%crm%ital_ext(1,ipe)
           itl = rp%crm%ital_ext(2,ipe)
           ispa = rp%crm%ital_ext(3,ipe)
-          ist = 0           
+          ist = 0
 c  sum over strata: iestr=0 ?
           call eirene_fetch_outaui(TALLYI,itl,isp,ist,
      .                             iunout)
@@ -448,19 +452,21 @@ c  sum over strata: iestr=0 ?
             write (iunout,*) 'tally ',isp,itl,'found empty'
             cycle
           else 
-            call eirene_fetch_outau (TALLY, itl,isp,ist,
-     .                               1,NSBOX_TAL,iunout)
+            call eirene_fetch_outau (TALLY, itl,isp,ist,iunout)
             write (iunout,*) 'cr: q_ext(:,:) set for state ',irow
             write (iunout,70) irc,csw,isp,itl,ispa,'total: ',tallyi
             cr(icrm)%l_ext=.true.
 cdr  
 cdr  tally is a rate/cm**3, i.e., contains the absorber density
 cdr  convert to rate (1/s) per absorber, to be used in CR code as external source
-            do icell=1,nsbox_tal
+            do icell=1,NSBOX_TAL
+c            write (iunout,*) 'diin ',ispa,icell,diin(ispa,icell),
+c     .                  tally(icell)
 crc  checks for diin to avoid arbitrary large values of tally
             if (diin(ispa,icell) .ge. 1.0E2_DP) then
               tally(icell)=tally(icell)/diin(ispa,icell)/elcha
             else
+crc  will prompt lext to be false above
               tally(icell)=0.0_DP
             end if
             enddo
