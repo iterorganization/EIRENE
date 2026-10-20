@@ -4923,7 +4923,7 @@ cdr  upper state population is n_B *pop_B(upper)= n_A * ratio * pop_B(upper)
                     call json%get_child(prats,irt,prat,found)
                     call json%get(prat,'IRC_RAT',
      .                            cnt%irc_rat(irt),found)
-	 
+
 cdr   Read a second density ratio.
 cdr   It may turn out that, after reading the first density ratio,
 cdr   that now the new parent density n_A is still not amongst the density
