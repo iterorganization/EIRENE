@@ -118,7 +118,7 @@ C   GBGKV == BGKV EVERYWHERE
      .            IAEL, IMEL, IUP12, IUP22, IION2, IBGK2, IMOL2, IUP2,
      .            IUP3, IUP1, IBGK1, IP, NRC, IR, IT, IREL,
      .            KK, NXM, NYM, NZM, IUP32, IPLSTI, IPLSTI1, IPLSTI2,
-     .            IPLSV, IRD, I_FINE, IRAD
+     .            IPLSV, IRD, I_FINE, IRAD, INALL
       INTEGER, EXTERNAL :: EIRENE_IDEZ
       LOGICAL, ALLOCATABLE :: LSAVE(:,:)
       LOGICAL :: TRCSAV, LSKIP
@@ -747,8 +747,9 @@ c  these virtual species are: ipls=npls_fix+1,npls, whereas the
 c  species 1:npls_fix are kept constant or are only modified by external
 c  plasma code.  Default: npls_fix=0
 C
-      write (iunout,*) 'modbgk: plasma_deriv after set virt. spec'
-      CALL EIRENE_PLASMA_DERIV(0)
+cdr   write (iunout,*) 'modbgk: plasma_deriv after set virt. spec: skip'
+cdr   CALL EIRENE_PLASMA_DERIV(0),  not needed. PLASMA_DERIV will be
+cdr   called after setting temporary plasma background for A&M evaluation anyway.
 C
 C .........................................................................
 C  NOW: NEW COLLISION RATES MUST BE SET FOR THE NEXT ITERATION
@@ -893,7 +894,11 @@ cdr   plasma_deriv must not use target PLASMA_BCKGRND (e.g. DIINTF )
 cdr   because plasma_bckgrnd are the final, not the temporary, parameters.
 
       write (iunout,*) 'modbgk: plasma_deriv after temp. virt. specs.'
-      CALL EIRENE_PLASMA_DERIV(0)
+cdr or: icall=1 ? density models pre or post processing?
+cdr     no density models needed, and also no spectra
+cdr mar. 2023: second parameter can now select ipls to be modified
+      INALL=0  !  here we should better select specific IPLS to be reset.
+      CALL EIRENE_PLASMA_DERIV(0,INALL)
 
 cdr  save lgvac from temporary background, for later symmetrisation
 cdr  with lgvac for virtual field parameters
@@ -936,7 +941,7 @@ c
 C  BGK COLLISION, RESET TABEL3, EPLEL3 FOR REACTION IREL, KK
 cdr  Strictly also PLS (DEINL) must be set from temporary background.
 cdr       pls=deinl  ! not needed here, because tabel3 is not electr. density dep.
-
+          TABEL3(IREL,:,:)=0.  ! reinitialize, because a cell might now have lgvac=t
           CALL EIRENE_XSTEL(IREL,ISP,JPLS,EBULK,ISCDE,IESTM,
      .                      KK,FACTKK,PLS)
 
@@ -988,7 +993,8 @@ cdr
 C
       CALL EIRENE_PLASMA
       write (iunout,*) 'modbgk: plasma_deriv after final call plasma'
-      CALL EIRENE_PLASMA_DERIV(0)
+      INALL=0  ! here we could select some IPLS ?
+      CALL EIRENE_PLASMA_DERIV(0,INALL)
 
 CDR:  NOW WE MAY HAVE WRECKED LGVAC FOR field particles IPLS1 and IPLS2
 CDR   which are related to CROSS REACTION IREL
@@ -1015,14 +1021,16 @@ cdr But only once!
 C
 C  SAVE PLASMA DATA AND ATOMIC DATA ON FORT.13
 C
-      NFILEL=3 ! In the past this implied NLSHRT13 = F
+cdr  NFILEL=3 ! In the past this implied NLSHRT13 = F
 cdr  NLSHRT13 = F  write all plasma data, A&M data, and primary source data
 cdr                This includes the corrected TABEL3, LGVAC, etc.
 cdr  NLSHRT13 = T  write only plasma data IPLS=NPLS_FIX+1,NPLS,
 cdr                plus selected TABEL3, LGVAC, EPLEL3, etc.
 cdr
 
-      CALL EIRENE_WRPLAM(TRCFLE,'MODBGK')
+cdr now moved in iterative loop in calling routine  EIRENE.f
+cdr because other bgk type iterations: e.g. modbgk_crm, etc..
+cdr   CALL EIRENE_WRPLAM(TRCFLE,'MODBGK_EL')
 
 c     write (iunout,*) 'after diin '
 c     do ipls=1,npls

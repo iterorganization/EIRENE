@@ -67,7 +67,7 @@ cdr  Nov. 20:  remove call to slreac from here. All reaction parameters
 cdr            for "density models" (Corona, Colrad) are already read
 cdr            in block 4. Only use reaction number IRC here.
 c
-      SUBROUTINE EIRENE_PLASMA_DERIV (ICALL)
+      SUBROUTINE EIRENE_PLASMA_DERIV (ICALL, IN_IPLS)
 
 c  input:
 c    nlmlti (via cinit.f): all bulk ions have own temperature Ti, on Ti(iplsti),
@@ -75,6 +75,10 @@ c                          set new Ti for ipls
 c    nlmlv  (via cinit.f): all bulk ions have own velocity, Vx,Vy,Vz, on V*(iplsv)
 c                          set new flow velocity for ipls
 
+cdr mar. 2023: add optional input: IN_IPLS
+c     IN_IPLS = 0   : old options, loops run for IPLS=1,NPLSI
+c     IN_IPLS > 0   : this routine only acts on field particle species IPLS=IN_IPLS
+c
 c    icall:
 
 c    icall=0
@@ -103,8 +107,8 @@ c   DEIN             : electron density (from quasi-neutrality)
 c   DEINL            : log electron density (with cutoffs)
 c   TEINL            : log electron temperature (with cutoffs)
 c   LGVAC(...,NPLS+1): electron vacuum flag
-c   LGVAC(...,IPLS)  : bulk "ion" vacuum flag
-c   LGVAC(...,0)     : background vacuum flag
+c   LGVAC(...,IPLS)  : bulk "ion" IPLS vacuum flag
+c   LGVAC(...,0)     : all background vacuum flag
       USE EIRMOD_PRECISION
       USE EIRMOD_PARMMOD
       USE EIRMOD_COMUSR
@@ -128,6 +132,7 @@ c   LGVAC(...,0)     : background vacuum flag
       IMPLICIT NONE
 
       INTEGER, INTENT(IN) :: ICALL
+      INTEGER, INTENT(IN) :: IN_IPLS
       REAL(DP) :: ZTII, ZTNI, FCT2, FCRG, FCT1, EIRENE_VDION, ZTEI,
      .            ZTNE,EMPLS, FCT0, TEPLS, DEPLS, DIPLS, AM1, TEF, DEF,
      .            BOLTZFAC, RCORONA, RCOLRAD, DELTAE,
@@ -147,7 +152,7 @@ cdr  parallel, grad-PSI and diamagn. B field, resp.
      .                         BASE_VELOC(:,:),
      .                         TALLY(:)
       INTEGER :: IR, IN, IP, IPM, IPLS, IOLD, IRE,
-     .           I, J, IAIN, ISPZ,
+     .           I, J, IAIN, ISPZ, INIPLS,
      .           ICO, KK,
      .           IPLSTI, IPLSV, IOLDTI, IOLDV, IBS, IFLG,
      .           JFEX1MN, JFEX1MX, JFEX2MN, JFEX2MX,
@@ -179,6 +184,9 @@ cdr june 23: testing b_perp via input, rather than default
 
       EXTERNAL :: EIRENE_RPLAM, EIRENE_EXIT_OWN
 
+      inipls=0
+      if (IN_IPLS .GT. 0 .AND. IN_IPLS .LE.NPLSI) inipls=in_ipls
+
       FP1 = 0._DP
       FP2 = 0._DP
       RC1MIN = -HUGE(1._DP)
@@ -191,7 +199,8 @@ cdr june 23: testing b_perp via input, rather than default
       JFEX2MX = 0
 
 cdr
-      write (iunout,*) 'plasma deriv called ', icall
+      if (icall.eq.0) write (iunout,*) 'plasma deriv: initialize '
+      if (icall.eq.1) write (iunout,*) 'plasma deriv: post process '
       tpb1 = EIRENE_second_own()
       IBS = 0
 cdr  hidden link: this seems to be assuming that nlshrt13=f.
@@ -203,6 +212,7 @@ cdr  IFLG=10:  set pointers DIINTF,... in RPLAM
      .     CALL EIRENE_RPLAM(TRCFLE,IFLG,'PLASMA_DERIV')
 
       DO JPLS=1,NPLSI
+	if (inipls .gt. 0 .and. jpls .ne. inipls) cycle
         IPLS = JPLS
         IPLSTI=MPLSTI(IPLS)
         IPLSV=MPLSV(IPLS)
@@ -215,7 +225,6 @@ c       write (iunout,*) jpls, cdenmodel(IPLS)
 cdr fort.13 has been read, but do we have the long or short version?
 
             IOLD=TDMPAR(IPLS)%TDM%ISP(1)
-c           ITOLD=TDMPAR(IPLS)%TDM%ITP(1) =4,  hard-wired
             IOLDTI=MPLSTI(IOLD)
             IOLDV=MPLSV(IOLD)
 
@@ -257,13 +266,6 @@ CDR  in single V.IN cases: all V.IN(IPLS,:) are the same, and == V.IN(1,:)
 
           CASE ('FORT.10','FTN10')
 
-c   itold = ?, type of particle on fort.10?
-c   check: itold ge 0 and itold le 3
-            IOLD=TDMPAR(IPLS)%TDM%ISP(1)    ! species
-cdr         itold=?                         ! type
-            IOLDTI=MPLSTI(IOLD)             ! ?
-            IOLDV=MPLSV(IOLD)
-
             ALLOCATE (BASE_DENSITY(NRAD))
             ALLOCATE (BASE_TEMP(NRAD))
             ALLOCATE (BASE_VELOC(3,NRAD))
@@ -275,11 +277,13 @@ cdr         itold=?                         ! type
             IF (NLMLTI) THEN
               TIIN(IPLSTI,:)=MAX(TVAC,BASE_TEMP(:))
 cdr ???     ELSE
+cdr  single Ti only. Use TI from TIIN(1)
+
             ENDIF
             IF (NLMLV) THEN
-              VXIN(IPLSV,:)=VXIN(IOLDV,:)
-              VYIN(IPLSV,:)=VYIN(IOLDV,:)
-              VZIN(IPLSV,:)=VZIN(IOLDV,:)
+              VXIN(IPLSV,:)=BASE_VELOC(1,:)
+              VYIN(IPLSV,:)=BASE_VELOC(2,:)
+              VZIN(IPLSV,:)=BASE_VELOC(3,:)
 cdr ???     ELSE
 
             END IF
@@ -307,8 +311,6 @@ cdr ???     ELSE
 
             IF (NLMLTI) THEN
               TIIN(IPLSTI,:)=MAX(TVAC,TDMPAR(IPLS)%TDM%TVAL)
-            ELSE
-CDR  ??
             ENDIF
             DIIN(IPLS,:)=MAX(DVAC,TDMPAR(IPLS)%TDM%DVAL)
             IF (NLMLV) THEN
@@ -349,7 +351,10 @@ c           ITOLD=TDMPAR(IPLS)%TDM%ITP(1) =4,  hard-wired
             DEALLOCATE (BASE_VELOC)
 
           CASE ('BOLTZMANN')
-            IOLD=TDMPAR(IPLS)%TDM%ISP(1)
+cdr                                        old type ?
+            IOLD=TDMPAR(IPLS)%TDM%ISP(1)  !old species
+cdr if the old type is not = 4, 
+cdr then the next two lines make no sense
             IOLDTI=MPLSTI(IOLD)
             IOLDV=MPLSV(IOLD)
 
@@ -380,7 +385,8 @@ CDR  ??
               IF (TIIN(IOLDTI,IR).GT.TVAC)
      .          BOLTZFAC=G_BOLTZ*EXP(-DELTAE/BASE_TEMP(IR))
               DIIN(IPLS,IR)=MAX(DVAC,BASE_DENSITY(IR)*BOLTZFAC)
-
+cdr  missing:
+cdr    tiin, vxin,vyin,vzin
               IF ((ICALL > 0) .AND. (NBACK_SPEC > 0)) THEN
                 IF (LSPCCLL(IR)) THEN
                   CALL EIRENE_GET_SPECTRUM (IR,1,SPEC,FOUND)
@@ -434,6 +440,8 @@ C
 C  COMPUTE SOME 'DERIVED' PLASMA DATA PROFILES FROM THE INPUT PROFILES
 C
 C  SET ELECTRON DENSITY FROM QUASI-NEUTRALITY, FURTHER: TEINL, DEINL, LGVAC(..,0:NPLS+1)
+      if (inipls .eq. 0 ) then
+cdr  if inipls gt. 0 and nchrgp(inipls) ne 0, that might also change ELECTR. DENSITY.
       LGVAC=.TRUE.
       DEIN=0._DP
 
@@ -463,6 +471,10 @@ cdr  ipls       :  set below, after special "density models" are done.
         LGVAC(J,0)     =LGVAC(J,0).AND.LGVAC(J,NPLS+1)
       END DO
 
+      elseif (inipls .gt. 0 .and. nchrgp(inipls) .gt.0) then
+        write (iunout,*) 'plasma_deriv: elec. density must be modified'	
+        call eirene_exit_own(1)
+      endif 
       tpb2 = EIRENE_second_own()
       IF (TRCTIM) write (iunout,*) ' CPU time for log values ',tpb2-tpb1
       tpb1 = tpb2
@@ -478,6 +490,7 @@ C
       ALLOCATE (BASE_VELOC(3,NRAD))
 
       DO JPLS=1,NPLSI
+        IF (INIPLS .GT. 0 .AND. JPLS .NE. INIPLS) CYCLE
         IPLS=JPLS
 
         IF (LEN_TRIM(CDENMODEL(IPLS)) == 0) CYCLE
@@ -564,6 +577,7 @@ c...............................................................corona: done
 cdr  density of a background "isotope" IPLS is derived from collision radiative
 cdr  models, as an CR equilibrium population of excited states.
 cdr  From one or several donor states (components/contributions)
+cdr  multiplied with their CR population coefficients.
 cdr  TEIN and DEIN (electron parameters) are given already.
 
 cdr  IOLD=TDMPAR(IPLS)%TDM%ISP(IRE)
@@ -829,7 +843,6 @@ C                        BUT PERHAPS FOR NEUTRAL BACKGROUND
           LGVAC(J,0)   =LGVAC(J,0).AND.LGVAC(J,IPLS)
  5106   CONTINUE
  5103 CONTINUE
-
       IF (LEVGEO.EQ.3) THEN
 cdr set vacuum flags in polygonal grid cut cells (if any)
         DO 5161 I=1,NPPLG-1

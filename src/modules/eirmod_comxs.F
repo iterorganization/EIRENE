@@ -125,8 +125,14 @@ cdr  for all types of A&M data input
       END TYPE TAB1D_DATA
 
       TYPE COLRAD_DATA  !dr:  internal CR codes, eff. rates & pop.coefs
-        INTEGER :: IFLAV, IVARST, IROW_ESC, ICOL_ESC
-        REAL(DP) :: POP_ESC
+        INTEGER :: ICRM, IFLAV, IFORMUL, IVARST,
+     .              M_POPESC,
+     .              M_UPPER, M_LOWER,  ! not used
+     .              M_QEXT
+        INTEGER, ALLOCATABLE :: IROW_ESC(:), ICOL_ESC(:)
+        REAL(DP), ALLOCATABLE :: POP_ESC(:)
+        INTEGER, ALLOCATABLE :: IROW_EXT(:), ITAL_EXT(:,:)
+c       REAL(DP), ALLOCATABLE :: Q_EXT(:)
       END TYPE COLRAD_DATA
 
       TYPE FIT_FORMS
@@ -159,11 +165,13 @@ cdr asymptotics, common to all of these 5 A&M data formats.
       TYPE REACTION_INPUT_LINE
         INTEGER :: NO, MT, MP, IZ, JFEX1MN, JFEX1MX, NCONST,
      .             JFEX2MN, JFEX2MX,
-     .             IROW_ESC, ICOL_ESC,
+     .             M_POPESC, M_QEXT, M_UPPER, M_LOWER,
      .             IFTFLG, NCOEF
+        INTEGER, ALLOCATABLE :: IROW_ESC(:), ICOL_ESC(:), 
+     .                          IROW_EXT(:), ITAL_EXT(:,:)
         REAL(DP) :: R1MN, R1MX, DPP, FP1(6), COEF(9),
      .              R2MN, R2MX,      FP2(6)
-        REAL(DP) :: POP_ESC
+        REAL(DP), ALLOCATABLE :: POP_ESC(:)
         CHARACTER(8) :: FILE
         CHARACTER(50) :: REAC_STRING
         CHARACTER(4) :: H_SELECT
@@ -278,9 +286,9 @@ c  secondaries, species distribution, for RC processes
      I NATPRC(:),    NMLPRC(:),   NIOPRC(:),   NPLPRC(:),   NPHPRC(:),
      I NATPRC_2(:),  NMLPRC_2(:), NIOPRC_2(:), NPLPRC_2(:), NPHPRC_2(:),
 c  secondaries, species distribution, for CX processes
-     I N1STX(:,:), N2NDX(:,:)
+     I N1STX(:,:), N2NDX(:,:),
 c  secondaries, species distribution, for PH processes
-cdr  tbd.
+     I N1STPH(:,:), N2NDPH(:,:)
 
       INTEGER, PUBLIC, ALLOCATABLE, SAVE ::
      I NSEACX(:,:,:), NSEMCX(:,:,:), NSEICX(:,:,:),
@@ -374,11 +382,38 @@ cdr           Remove POINTER attribute, use ALLOCATABLE instead
      I IBGKA (:,:), IBGKM (:,:), IBGKI (:,:), IBGKPH (:,:)
 
       INTEGER, PUBLIC, SAVE ::
-     I NREACI, NHCOL_STORE
+     I NREACI
 
       INTEGER, PUBLIC, SAVE :: MAXSPC(0:4)
 
-      INTEGER, ALLOCATABLE, PUBLIC, SAVE :: M_HCOL(:)
+cdr  some extra stuff here for ifit=5. But not for other ifit options.
+cdr  Probably here is the wrong place for that stuff?  (same: below)
+cdr
+!  maximal number of internal collisional radiative codes:
+!     H, (H2), (Li), He, each one may have different MS condensation forms
+!  For the time being: choose 4 to allow for future additions
+!  Only models 1 and 4 are currently available.
+cdr  it seems iflav (species) and icrm (different CR models, with iform 1, 2 options,...)
+cdr  are confused. E.g.: iflav=4 (He) and iform=1 and iform = 2 are two different
+cdr  CR models.
+cdr  tbd: modify meaning of MAXCRM
+      INTEGER, PUBLIC, PARAMETER :: MAXCRM=4
+
+      TYPE, PUBLIC :: TCRM
+        INTEGER :: NHCOL_STORE
+        INTEGER, ALLOCATABLE :: M_HCOL(:)
+      END TYPE TCRM
+
+
+      TYPE, PUBLIC :: TCRM_POINTER
+        TYPE(TCRM), POINTER :: P
+      END TYPE TCRM_POINTER
+
+      TYPE(TCRM_POINTER), PUBLIC, SAVE :: PCRM(MAXCRM)
+
+      INTEGER, PUBLIC, SAVE :: NCR_REAC(MAXCRM)
+      CHARACTER(5), PUBLIC, SAVE :: CR_KEY(MAXCRM) =
+     .   (/ 'CR_H ','CR_H2','CR_LI','CR_HE' /)   ! identifiers for IFLAV parameter
 
 cnh  macroscopic length scale
       REAL(DP), PUBLIC, SAVE :: L_MACRO
@@ -399,6 +434,7 @@ cpb         exceeds the range of 4 byte integer variables.
       INTEGER, INTENT(IN) :: ICAL
       INTEGER, PARAMETER :: ILONG = SELECTED_INT_KIND(15)
       INTEGER(ILONG) :: MEM
+      INTEGER :: ICRM, NST
 
       IF (ICAL == 1) THEN
 
@@ -611,12 +647,31 @@ cdr    1 ... NREAC: atomic/molecular data read from external data files, input b
         ALLOCATE (REACDAT(-11:NREAC))
         ALLOCATE (REACLINES(NREAC_LINES))
 
-        ALLOCATE (M_HCOL(NREAC))
+cdr  some extra stuff here for ifit=5. But not for other ifit options.
+cdr  Probably here is the wrong place for that stuff?  (same: above)
+cdr
+cdr structures for internal CR codes.
+cdr currently: hard wired: maxcrm=4.  Often too large (no or only one CR code used)
+cdr                                   or too small (form 1 and form 2 are different
+cdr                                   CR models, for each given icrm)
+cdr jan. 2022:
+cdr de-couple ICRM (no. of CR model) from IFLAV (chemical species of CR model)
+        NST = MAXCRM*8
+        DO ICRM = 1, MAXCRM
+          IF (NCR_REAC(ICRM) > 0) THEN
+            ALLOCATE(PCRM(ICRM)%P)
+            ALLOCATE(PCRM(ICRM)%P%M_HCOL(NCR_REAC(ICRM)))
+            NST = NST + (NCR_REAC(ICRM)+1)*4
+          ELSE
+            NULLIFY(PCRM(ICRM)%P)
+          END IF
+        END DO
 
         MEM = (NSTORV+NAMF)*8_ILONG + (MAMF+
      .                      9_ILONG*(NATM+NMOL+NION)+4_ILONG*NPLS+
      .                      10_ILONG*NPLS*(NATM+NMOL+NION))*4_ILONG +
-     .                      NREAC*4_ILONG
+     .                      NREAC*4_ILONG +
+     .                      4*8 + NST  !rc: not clear where 4*8 comes from
 
         WRITE (IUNMEM,'(A,T25,I15)')
      .        ' COMXS(1) ', MEM
@@ -783,6 +838,9 @@ c   for particle (1), momentum (2) and energy (3) source rates, resp.
         ALLOCATE (N1STX(NRCX,3))
         ALLOCATE (N2NDX(NRCX,3))
 
+        ALLOCATE (N1STPH(NRPH,3))
+        ALLOCATE (N2NDPH(NRPH,3))
+
         ALLOCATE (NSEPRC(NREC,5))
 
         ALLOCATE (NREACX(NRCX))
@@ -842,7 +900,7 @@ c
         ALLOCATE (LGPHPI(0:NPHOT,0:NRPI,0:1))
 
         ALLOCATE (LGPPH(0:NPLS,0:NRPH,0:1))   ! new in
-        ALLOCATE (LGPHPH(0:NPHOT,0:NRPH,0:5))  ! new in
+        ALLOCATE (LGPHPH(0:NPHOT,0:NRPH,0:1))  ! new in
 
 cdr  for unified routines UPDATE, FPATH, COLLIDE
 cdr  (single code of atoms, molecules and test ions. tbd: photons)
@@ -870,6 +928,7 @@ cdr  (single code of atoms, molecules and test ions. tbd: photons)
 
 
       SUBROUTINE EIRENE_DEALLOC_COMXS
+      INTEGER :: ICRM
 
       IF (.NOT.ALLOCATED(XSTOR)) RETURN
 
@@ -1008,6 +1067,9 @@ cdr  (single code of atoms, molecules and test ions. tbd: photons)
 
       DEALLOCATE (N1STX)
       DEALLOCATE (N2NDX)
+
+      DEALLOCATE (N1STPH)
+      DEALLOCATE (N2NDPH)
 
       DEALLOCATE (NSEACX)
       DEALLOCATE (NSEMCX)
@@ -1180,7 +1242,16 @@ cdr  (single code of atoms, molecules and test ions. tbd: photons)
 
       CALL EIRENE_FREE_REACDAT
 
-      DEALLOCATE (M_HCOL)
+cdr  some extra stuff here for ifit=5. But not for other ifit options.
+cdr  Probably here is the wrong place for that stuff?  (same: above)
+cdr
+      DO ICRM = 1, MAXCRM
+        IF (ASSOCIATED(PCRM(ICRM)%P)) THEN
+          DEALLOCATE (PCRM(ICRM)%P%M_HCOL)
+          DEALLOCATE (PCRM(ICRM)%P)
+          NULLIFY(PCRM(ICRM)%P)
+        END IF
+      END DO
 
       RETURN
       END SUBROUTINE EIRENE_DEALLOC_COMXS
@@ -1192,7 +1263,7 @@ cdr  ical=1: ??
 cdr  ical=2: ??
 
       INTEGER, INTENT(IN) :: ICAL
-      INTEGER :: IREAC
+      INTEGER :: IREAC, ICRM
 
       IF (ICAL == 1) THEN
         NAEII   = 0
@@ -1391,8 +1462,13 @@ c  ditto, for upper limit value of 2nd parameter in 2-parameter fits or tables
           NULLIFY(REACDAT(IREAC)%PHR)
         END DO
 
-        NHCOL_STORE = 0
-        M_HCOL = 0
+cdr special treatment for ifit=5 option. Why?
+        DO ICRM = 1, MAXCRM
+          IF (ASSOCIATED(PCRM(ICRM)%P)) THEN
+            PCRM(ICRM)%P%NHCOL_STORE = 0
+            PCRM(ICRM)%P%M_HCOL = 0
+          END IF
+        END DO
 
 cnh
         L_MACRO = 0.0_DP
@@ -1480,6 +1556,10 @@ cdr  RC secondaries
 cdr  CX secondaries
         N1STX   = 0
         N2NDX   = 0
+
+cdr  PH secondaries
+        N1STPH  = 0
+        N2NDPH  = 0
 
 cdr  number of reaction of type PI,EI,CX,EL,RC,...
 cdr  These will be counted in setamd.f and subprograms
@@ -1594,21 +1674,21 @@ cdr  read and write A&M data onto fort.13, controlled by NFILEL option (input bl
 #endif
 
       WRITE (13+IFOFF)
-     . MODCOL ,IESTCX ,IESTEL ,IESTPI ,IESTEI ,
+     . MODCOL ,IESTCX ,IESTEL ,IESTPI ,IESTEI ,IESTPH ,
      . NAEII  ,NMEII  ,NIEII  ,NPHEII  ,
      . NACXI  ,NMCXI  ,NICXI  ,NPHCXI  ,
      . NAELI  ,NMELI  ,NIELI  ,NPHELI  ,
      . NAPII  ,NMPII  ,NIPII  ,NPHPII  ,
-     . NPRCI  ,
+     . NPRCI  ,NPHPHI ,NPPHI  ,
      . NAEIIM ,NMEIIM ,NIEIIM ,NPHEIIM ,
      . NACXIM ,NMCXIM ,NICXIM ,NPHCXIM ,
      . NAELIM ,NMELIM ,NIELIM ,NPHELIM ,
      . NAPIIM ,NMPIIM ,NIPIIM ,NPHPIIM ,
-     . NPRCIM ,
+     . NPRCIM ,NPHPHIM,NPPHIM ,
      . NPBGKA ,NPBGKM ,NPBGKI ,NPBGKP ,
      . NATPRC ,NMLPRC ,NIOPRC ,NPLPRC ,NPHPRC ,
      . NATPRC_2 ,NMLPRC_2 ,NIOPRC_2 ,NPLPRC_2 ,NPHPRC_2 ,
-     . N1STX  ,N2NDX  ,
+     . N1STX  ,N2NDX  ,N1STPH ,N2NDPH ,
 
      . NRPII  ,NREII  ,NRCXI  ,NRELI  ,NRRCI  ,NRPHI  ,NRBGI  ,
 
@@ -1659,7 +1739,8 @@ cdr  read and write A&M data onto fort.13, controlled by NFILEL option (input bl
      . LGAEI  ,LGMEI  ,LGIEI  ,
      . LGAEL  ,LGMEL  ,LGIEL  ,
      . LGPRC  ,
-     . LGAPI  ,LGMPI  ,LGIPI
+     . LGAPI  ,LGMPI  ,LGIPI  ,
+     . LGPHPH ,LGPPH
 #endif
 
       RETURN
@@ -1686,21 +1767,21 @@ cdr  read and write A&M data onto fort.13, controlled by NFILEL option (input bl
      . EATEI  ,EMLEI  ,EIOEI  ,EPLEI
 
       READ (13+IFOFF)
-     . MODCOL ,IESTCX ,IESTEL ,IESTPI ,IESTEI ,
+     . MODCOL ,IESTCX ,IESTEL ,IESTPI ,IESTEI ,IESTPH ,
      . NAEII  ,NMEII  ,NIEII  ,NPHEII  ,
      . NACXI  ,NMCXI  ,NICXI  ,NPHCXI  ,
      . NAELI  ,NMELI  ,NIELI  ,NPHELI  ,
      . NAPII  ,NMPII  ,NIPII  ,NPHPII  ,
-     . NPRCI  ,
+     . NPRCI  ,NPHPHI ,NPPHI  ,
      . NAEIIM ,NMEIIM ,NIEIIM ,NPHEIIM  ,
      . NACXIM ,NMCXIM ,NICXIM ,NPHCXIM  ,
      . NAELIM ,NMELIM ,NIELIM ,NPHELIM  ,
      . NAPIIM ,NMPIIM ,NIPIIM ,NPHPIIM  ,
-     . NPRCIM ,
+     . NPRCIM ,NPHPHIM,NPPHIM ,
      . NPBGKA ,NPBGKM ,NPBGKI ,NPBGKP ,
      . NATPRC ,NMLPRC ,NIOPRC ,NPLPRC ,NPHPRC ,
      . NATPRC_2 ,NMLPRC_2 ,NIOPRC_2 ,NPLPRC_2 ,NPHPRC_2 ,
-     . N1STX  ,N2NDX  ,
+     . N1STX  ,N2NDX  ,N1STPH ,N2NDPH ,
 
      . NRPII  ,NREII  ,NRCXI  ,NRELI  ,NRRCI  ,NRPHI  ,NRBGI  ,
 
@@ -1717,7 +1798,8 @@ cdr  read and write A&M data onto fort.13, controlled by NFILEL option (input bl
      . LGAEI  ,LGMEI  ,LGIEI  ,
      . LGAEL  ,LGMEL  ,LGIEL  ,
      . LGPRC  ,
-     . LGAPI  ,LGMPI  ,LGIPI
+     . LGAPI  ,LGMPI  ,LGIPI  ,
+     . LGPHPH ,LGPPH
 
       RETURN
       END SUBROUTINE EIRENE_READ_CMDTA
@@ -1831,7 +1913,9 @@ c
       CONTAINS
 
         SUBROUTINE EIRENE_WRITE_FIT_FORM (RP)
-        TYPE(FIT_FORMS),POINTER :: RP  ! =reacdat(ir)%xxx%
+cdr RP%  = REACDAT(IR)%A%..., A = POT, CRS, RTC, RTCEW, etc.
+        TYPE(FIT_FORMS),POINTER :: RP
+        INTEGER :: NESC, NEXT
 
         WRITE (13+IFOFF) RP%IFIT
 
@@ -1903,10 +1987,27 @@ cdr precomputed difference-quotient, for interpolation
 #endif
         ELSE IF (RP%IFIT == 5) THEN
 ! DATA FOR COLLISIONAL-RADIATIVE MODEL A&M ENTRIES
-          WRITE (13+IFOFF) RP%CRM%IFLAV,
+cdr  write REACDAT(IR)%A%CRM...
+          WRITE (13+IFOFF) RP%CRM%ICRM,
+     .                     RP%CRM%IFLAV,
+     .                     RP%CRM%IFORMUL,  !dr: redundancy here: ircm should fix iflav and iform
      .                     RP%CRM%IVARST,
-     .                     RP%CRM%IROW_ESC,  RP%CRM%ICOL_ESC
-          WRITE (13+IFOFF) RP%CRM%POP_ESC
+     .                     RP%CRM%M_POPESC,
+     .                     RP%CRM%M_UPPER,  ! not used
+     .                     RP%CRM%M_LOWER,  ! not used
+     .                     RP%CRM%M_QEXT
+          NESC=RP%CRM%M_POPESC
+          IF (NESC .GT. 0) THEN
+cdr pop. escape factors. Only if M_POPESC .gt. 0)
+            WRITE (13+IFOFF) RP%CRM%IROW_ESC,  RP%CRM%ICOL_ESC
+            WRITE (13+IFOFF) RP%CRM%POP_ESC
+          END IF
+          NEXT=RP%CRM%M_QEXT
+          IF (NEXT .GT. 0) THEN
+cdr External source rates. Only if M_QEXT .gt. 0)
+            WRITE (13+IFOFF) RP%CRM%IROW_EXT
+            WRITE (13+IFOFF) RP%CRM%ITAL_EXT   ! somehow coding to point to a pphp(ipls) tally
+          END IF
 #ifdef CHECKBIN
           WRITE (113,*) 'COLRAD DATA'
           WRITE (113,*) RP%CRM%IFLAV,
@@ -1999,6 +2100,7 @@ cdr options for extrapolation from data tables or from validity range of fits.
         TYPE(FIT_FORMS),POINTER :: RP
         INTEGER :: ND1, ND2,  ! table range for POLY
      .             ND, NT     ! table range for TAB1D, TAB2D
+        INTEGER :: NESC, NEXT
 
         READ (13+IFOFF) RP%IFIT
 
@@ -2057,10 +2159,36 @@ cdr: tbd: set difference quotient in table: tab1d vs. temps
 ! DATA FOR COLLISIONAL-RADIATIVE MODEL A&M ENTRIES
 cdr may 2020 added: m_popesc,  and pop_esc arrays, rather scalars.
           IF (.NOT.ASSOCIATED(RP%CRM)) ALLOCATE (RP%CRM)
-          READ (13+IFOFF) RP%CRM%IFLAV,
+          IF (ALLOCATED(RP%CRM%IROW_ESC)) DEALLOCATE (RP%CRM%IROW_ESC)
+          IF (ALLOCATED(RP%CRM%ICOL_ESC)) DEALLOCATE (RP%CRM%ICOL_ESC)
+          IF (ALLOCATED(RP%CRM%POP_ESC))  DEALLOCATE (RP%CRM%POP_ESC)
+          IF (ALLOCATED(RP%CRM%IROW_EXT)) DEALLOCATE (RP%CRM%IROW_EXT)
+          IF (ALLOCATED(RP%CRM%ITAL_EXT)) DEALLOCATE (RP%CRM%ITAL_EXT)
+          READ (13+IFOFF) RP%CRM%ICRM,
+     .                    RP%CRM%IFLAV,
+     .                    RP%CRM%IFORMUL,
      .                    RP%CRM%IVARST,
-     .                    RP%CRM%IROW_ESC,  RP%CRM%ICOL_ESC
-          READ (13+IFOFF) RP%CRM%POP_ESC
+     .                    RP%CRM%M_POPESC,
+     .                    RP%CRM%M_UPPER,
+     .                    RP%CRM%M_LOWER,
+     .                    RP%CRM%M_QEXT
+          NESC=RP%CRM%M_POPESC
+          IF (NESC .GT. 0) THEN
+            ALLOCATE (RP%CRM%IROW_ESC(NESC))
+            ALLOCATE (RP%CRM%ICOL_ESC(NESC))
+            ALLOCATE (RP%CRM%POP_ESC(NESC))
+            READ (13+IFOFF) RP%CRM%IROW_ESC,  RP%CRM%ICOL_ESC
+            READ (13+IFOFF) RP%CRM%POP_ESC
+          ENDIF
+          NEXT=RP%CRM%M_QEXT
+          IF (NEXT .GT. 0) THEN
+cdr External source rates. Only if NEXT .gt. 0)
+            ALLOCATE (RP%CRM%IROW_EXT(NEXT))
+            ALLOCATE (RP%CRM%ITAL_EXT(3,NEXT))
+            READ (13+IFOFF) RP%CRM%IROW_EXT
+            READ (13+IFOFF) RP%CRM%ITAL_EXT   ! somehow coding to point to a pphp(ipls) tally
+          END IF
+
         ELSE
 
         END IF
@@ -2077,7 +2205,7 @@ cdr may 2020 added: m_popesc,  and pop_esc arrays, rather scalars.
 
       SUBROUTINE EIRENE_GET_REACTION (IR)
 cdr ?  still needed? only for "line"?
-
+crc replaced with direct access to REACDAT(IR)%PHR%LINE
       INTEGER, INTENT(IN) :: IR
 
       REACTION => REACDAT(IR)%PHR%LINE
@@ -2544,8 +2672,19 @@ c  photonic reaction
       END IF
 
       IF (ASSOCIATED(RP%CRM)) THEN
-         DEALLOCATE (RP%CRM)
-         NULLIFY(RP%CRM)
+        IF (ALLOCATED(RP%CRM%IROW_ESC)) THEN
+cdr optional CRM parameters. Only if M_POP_ESC .gt. 0
+          DEALLOCATE (RP%CRM%IROW_ESC)
+          DEALLOCATE (RP%CRM%ICOL_ESC)
+          DEALLOCATE (RP%CRM%POP_ESC)
+        END IF
+        IF (ALLOCATED(RP%CRM%IROW_EXT)) THEN
+cdr optional CRM parameters. Only if M_QEXT .gt. 0
+          DEALLOCATE (RP%CRM%IROW_EXT)
+          DEALLOCATE (RP%CRM%ITAL_EXT)
+        END IF
+        DEALLOCATE (RP%CRM)
+        NULLIFY(RP%CRM)
       END IF
 
       RETURN
@@ -2696,6 +2835,7 @@ c  EL post-collision energetics
       CALL MPI_BCAST (IESTEL,3*NREL,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
       CALL MPI_BCAST (IESTPI,3*NRPI,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
       CALL MPI_BCAST (IESTEI,3*NREI,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
+      CALL MPI_BCAST (IESTPH,3*NREI,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
 
       CALL MPI_BCAST (NRPII,1,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
       CALL MPI_BCAST (NREII,1,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
@@ -2756,6 +2896,8 @@ c  EL post-collision energetics
 
       CALL MPI_BCAST (N1STX,3*NRCX,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
       CALL MPI_BCAST (N2NDX,3*NRCX,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
+      CALL MPI_BCAST (N1STPH,3*NRPH,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
+      CALL MPI_BCAST (N2NDPH,3*NRPH,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
       CALL MPI_BCAST (NSEACX,5*NATM*NPLS,MPI_INTEGER,
      .                0,MPI_COMM_WORLD,ier)
       CALL MPI_BCAST (NSEMCX,5*NMOL*NPLS,MPI_INTEGER,
@@ -3109,8 +3251,6 @@ c  data for photon line transport
       CALL MPI_BARRIER(MPI_COMM_WORLD,ier)
 
 cdr something for the internal CRM options, of blocks 4,12 here: H_Colrad.
-      CALL MPI_BCAST (NHCOL_STORE,1,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
-      CALL MPI_BCAST (M_HCOL,NREAC,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
 
 cnh macroscopic length scale
       CALL MPI_BCAST (L_MACRO,1,MPI_REAL8,0,MPI_COMM_WORLD,ier)
@@ -3131,7 +3271,7 @@ cdr  input:  pointer RP = REACDAT(IR)%TYP%.... with TYP = POT, CRS, RTC,...
       IMPLICIT NONE
       TYPE(FIT_FORMS), POINTER :: RP
       INTEGER, INTENT(IN) :: ME
-      INTEGER :: IER, ND1, ND2
+      INTEGER :: IER, ND1, ND2, NESC, NEXT
       EXTERNAL :: EIRENE_CHECK_EXIT, EIRENE_EXIT_OWN
 #if ( defined(USE_MPI) && !defined(OPEN_MPI) && !defined(GFORTRAN) && !defined(CRAY) )
       EXTERNAL :: MPI_BCAST
@@ -3351,17 +3491,60 @@ cdr  atomic data from internal CR model codes: H_colrad, He_colrad, etc.
 
         CALL MPI_BCAST (RP%CRM%IFLAV,1,MPI_INTEGER,
      .                  0,MPI_COMM_WORLD,ier)
+        CALL MPI_BCAST (RP%CRM%IFORMUL,1,MPI_INTEGER,
+     .                  0,MPI_COMM_WORLD,ier)
         CALL MPI_BCAST (RP%CRM%IVARST,1,MPI_INTEGER,
      .                  0,MPI_COMM_WORLD,ier)
-C STUFF TO TRANSFER POPULATION ESCAPE FACTORS INTO INTERNAL CRM ROUTINES
-        CALL MPI_BCAST (RP%CRM%IROW_ESC,1,MPI_INTEGER,
+cdr number of pop.esc factors read with reaction card no. KK
+        CALL MPI_BCAST (RP%CRM%M_POPESC,1,MPI_INTEGER,
      .                  0,MPI_COMM_WORLD,ier)
-        CALL MPI_BCAST (RP%CRM%ICOL_ESC,1,MPI_INTEGER,
+cdr optional: upper and low level for a particular transition
+        CALL MPI_BCAST (RP%CRM%M_UPPER,1,MPI_INTEGER,
      .                  0,MPI_COMM_WORLD,ier)
-        CALL MPI_BCAST (RP%CRM%POP_ESC,1,MPI_REAL8,
+        CALL MPI_BCAST (RP%CRM%M_LOWER,1,MPI_INTEGER,
+     .                  0,MPI_COMM_WORLD,ier)
+cdr number of external sources (photo excitation) associated with reaction card KK
+        CALL MPI_BCAST (RP%CRM%M_QEXT,1,MPI_INTEGER,
      .                  0,MPI_COMM_WORLD,ier)
 
-C.....................................................................
+C STUFF TO TRANSFER POPULATION ESCAPE FACTORS INTO INTERNAL CRM ROUTINES
+        NESC=RP%CRM%M_POPESC
+cdr for each particular "reaction" KK we have NESC population escape
+cdr factors
+        IF (NESC > 0) THEN
+cdr optional parameters for CRM: population escape factors
+          IF (ME .NE. 0) THEN
+            IF (.NOT.ALLOCATED(RP%CRM%IROW_ESC)) THEN
+                ALLOCATE (RP%CRM%IROW_ESC(NESC))
+                ALLOCATE (RP%CRM%ICOL_ESC(NESC))
+                ALLOCATE (RP%CRM%POP_ESC(NESC))
+            END IF
+          END IF
+          CALL MPI_BCAST (RP%CRM%IROW_ESC,NESC,MPI_INTEGER,
+     .                      0,MPI_COMM_WORLD,ier)
+          CALL MPI_BCAST (RP%CRM%ICOL_ESC,NESC,MPI_INTEGER,
+     .                      0,MPI_COMM_WORLD,ier)
+          CALL MPI_BCAST (RP%CRM%POP_ESC,NESC,MPI_REAL8,
+     .                      0,MPI_COMM_WORLD,ier)
+        END IF
+
+C STUFF TO TRANSFER EXTERNAL SOURCE RATES INTO INTERNAL CRM ROUTINES
+        NEXT=RP%CRM%M_QEXT
+cdr for each particular "reaction" KK we have identified NEXT external source rates
+cdr factors
+        IF (NEXT > 0) THEN
+cdr optional parameters for CRM: external source rates
+          IF (ME .NE. 0) THEN
+            IF (.NOT.ALLOCATED(RP%CRM%IROW_EXT)) THEN
+                ALLOCATE (RP%CRM%IROW_EXT(NEXT))
+                ALLOCATE (RP%CRM%ITAL_EXT(3,NEXT))
+            END IF
+          END IF
+          CALL MPI_BCAST (RP%CRM%IROW_EXT,NEXT,MPI_INTEGER,
+     .                      0,MPI_COMM_WORLD,ier)
+          CALL MPI_BCAST (RP%CRM%ITAL_EXT,3*NEXT,MPI_INTEGER, ! here we need an entire profile, e.g. pphp2(iphot,ipls)
+     .                      0,MPI_COMM_WORLD,ier)
+        END IF
       ELSE
 cdr     INVALID RP%IFIT
 

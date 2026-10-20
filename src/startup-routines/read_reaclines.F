@@ -3,48 +3,64 @@
      .           rc1min, rc1max, jfex1mn, jfex1mx, fp1,
      .           rc2min, rc2max, jfex2mn, jfex2mx, fp2,
      .           iz, elname, bundling,
+     .           m_popesc, m_upper, m_lower,
      .           irow_esc, icol_esc, pop_esc,
-     .           iftflg, ncoef, coef)
+     .           m_qext,
+     .           irow_ext, ital_ext,
+     .           iftflg, ncoef, coef,
+     .           iprftype)
 
-c  input: ZEILE:  character(72) (made upper case already)
+c  input: ZEILE:  character(420) (made upper case already)
 c  output:  IR
-c           FILNAM
-c           H123  (H.IJ,  IJ one or two integers)
-c           REAC  (? or IFTFLG in case of filnam=const ?)
-c           CRC
+c           FILNAM  (character(8), e.g.: AMJUEL, CR_HE, TAB2D, ADAS,...)
+c           H123    (character(4), H.IJ,  IJ one or two integers, e.g. H.3, H.10,..)
+c           REAC    (character(50), e.g.: 2.1.8a,...) 
+c           CRC     (character(3),  e.g. CX, EI,...)
 c           MP, MT, DPP,
+cdr  ASYMPTOTICS, if available
+cdr  ASYMPTOTICS, if available
 c           RC1MIN, RC1MAX, RC2MIN, RC2MAX
 c           JFEX1MN, JFEX1MX, JFEX2MN, JFEX2MX
 c           FP1, FP2
+cdr  TAB2D (ADAS) additional specifications
 c           IZ
 c           ELNAME
-c           IROW_ESC, ICOL_ESC, POPESC
-c           IFTFLG, NCOEF, COEF
+c           BUNDLING
+cdr  INTERNAL CR CODES...   additional specifications: 
+cdr                         population escape factors,
+cdr                         individual transition line identifiers
+c           M_POPESC, M_UPPER, M_LOWER
+c           IROW_ESC(:), ICOL_ESC(:), POPESC(:)
+cdr  CONST OPTION: COEFFICINTES READ FROM INPUT FILE, NOT FROM DATABASE
+c           IFTFLG, NCOEF, COEF(9)
+cdr  PHOTONS  additional specifications
+c           IPRFTYPE
 c
 c
-c  Interpret character(72) ZEILE for call to slreac.f
+c  Interpret (parsing) character(420) ZEILE for the call to SLREAC.f
 c  and to fill data structure REACDAT(IR):
-C  If necessary, further input cards are read
+C  If necessary, further input cards are read here.
 
 c  read_reaclines.f is called from block 4 input.f
 
 c  In certain special cases, depending on FILNAM, one further input card is read
-c  filnam=ADAS/TAB2D:  read IZ, ELNAME         (mandatory)
-c  filnam=CR...     :  read irow,icol,pop_esc  (optional)
-c  filnam=CONST     :  read IFTFLG  (coded as FTxxxxxx, IFTFLG=xxxxxx)
-c                      read fit coefficients here and hand them back for slreac
+c   filnam=ADAS/TAB2D:  read IZ, ELNAME         (mandatory)
+c   filnam=CR...     :  read irow,icol,pop_esc  (optional)
+cdr filnam=PHOTON    :  read IPRFTYPE
+c   filnam=CONST     :  read IFTFLG  (coded as FTxxxxxx, IFTFLG=xxxxxx)
+c                       read fit coefficients here and hand them back for slreac
 c                           if mod(iftflg,100).eq.10
 c                           then
 c                                only one coefficient is read
 c                                ==>  ncoef=1, coef(1)  is read
 c                           else
-c                                9 coefficients read
-c                                ==>  ncoef=9, coef(1:9)   are read
+c                                up to 9 coefficients read
+c                                ==>  ncoef<=9, coef(1:9)   are read
 c                           better: clearly separate iftflg and reac in case of filnam=CONST
-c  r1mn present     :  read JFEX1MN,(FP1(I),I=1,3)
-c  r1mx present     :  read JFEX1MX,(FP1(I),I=4,6)
-c  r2mn present     :  read JFEX2MN,(FP2(I),I=1,3)
-c  r2mx present     :  read JFEX2MX,(FP2(I),I=4,6)
+c  if R1MN is present     :  read JFEX1MN,(FP1(I),I=1,3)
+c  if R1MX is present     :  read JFEX1MX,(FP1(I),I=4,6)
+c  if R2MN is present     :  read JFEX2MN,(FP2(I),I=1,3)
+c  if R2MX is present     :  read JFEX2MX,(FP2(I),I=4,6)
 
 C
 C  READ ONE REACTION FROM FILE "FILNAM" AT A TIME. Input card is on "ZEILE"
@@ -71,9 +87,8 @@ C
       integer, intent(in) :: iunin, iunout
       integer, intent(out) :: ir, mp, mt,
      .                        jfex1mn, jfex1mx, jfex2mn, jfex2mx,
-     .                        iz, irow_esc, icol_esc, iftflg, ncoef
-      real(dp), intent(out) :: dpp, rc1min, rc1max, rc2min, rc2max,
-     .                         pop_esc
+     .                        iz, iftflg, ncoef
+      real(dp), intent(out) :: dpp, rc1min, rc1max, rc2min, rc2max
       real(dp), intent(out) :: fp1(6), fp2(6), coef(9)
       character(8), intent(out) :: filnam
       character(4), intent(out) :: h123
@@ -87,11 +102,23 @@ C
       character(kind=json_CK,len=420) :: clineCK
 !cym/cpg end
 #endif
-      integer :: iend, itok, isw, i1, i, il, ier
+cdr  additionally read, in case filnam = CR...
+      integer, intent(out) :: m_popesc, m_upper, m_lower
+      integer, allocatable, intent(inout) :: irow_esc(:), icol_esc(:) 
+      real(dp), allocatable, intent(inout) :: pop_esc(:)
+cdr  additionally read, in case filnam = CR...
+      integer, intent(out) :: m_qext
+      integer, allocatable, intent(inout) :: irow_ext(:), ital_ext(:,:) 
+cdr  additionaly read, in case filnam = PHOTON
+      integer, intent(out) :: iprftype
+
+      integer :: iend, itok, isw, i1, i, il, ier, ipe
       real(dp) :: r1mn, r1mx, r2mn, r2mx
+      real(dp) :: rhelp(12)
+      character(72) :: sline
       character(12) :: chr
-      character(3), save :: rea_proc(8) =
-     .   (/ 'EI ','DS ','CX ','II ','PI ','EL ','RC ','OT ' /)
+      character(3), save :: rea_proc(9) =
+     .   (/ 'EI ','DS ','CX ','II ','PI ','EL ','RC ','PH ','OT ' /)
       logical :: chk_h123
       external :: eirene_lowercase, eirene_read_token, eirene_leer,
      .            eirene_exit_own
@@ -102,11 +129,18 @@ C
       crc = '   '
       elname = '  '
       iz = 0
-      irow_esc = 0
-      icol_esc = 0
-      pop_esc = 1._dp
+cdr  additional (optional) data for internal CR-codes
+      m_popesc = 0
+      m_qext   = 0
+cdr  m_upper, m_lower: currently not needed. tbd: To be used to
+cdr                    turn population coefficient into an individual line emissivity
+cdr  icol and irow are now vectors
+      m_upper = 0
+      m_lower = 0
+cdr  additional data for filnam: PHOTON
+      iprftype = 0
       ncoef = 0
-      coef = 0._dp
+      coef = 0._dp                                     
       iftflg = 0
       mp = 0
       mt = 0
@@ -354,6 +388,13 @@ C  READ FLAGS MP, MT, DPP, R1MN, R1MX, R2MN, R2MX FROM CHR
       END IF
 
       IF (INDEX(ZEILE,'CR') .NE. 0) THEN
+
+cdr     optinal: M_POPESC:  how many pop esc factor to be read....
+cdr              M_UPPER, M_LOWER: specify a particular line transition.
+cdr              If a population coefficient is obtained from CR code,
+cdr              find also Aik, E_upper, E_lower, g_upper, g_lower from CR code. 
+cdr              I.e. turn a population coefficient POP into a 
+cdr              line emission rate coefficient POP*Aik.
         READ (IUNIN,'(A80)') ZEILE
 #ifndef NO_JSON
 !  STORE REACTION LINES FOR OUTPUTING TO JSON FILE
@@ -369,25 +410,91 @@ cdr     CALL EIRENE_UPPERCASE (ZEILE), removed, because leading blank removal wr
 ! VALUE OF VERIFY... GIVES THE FIRST (LEFTMOST) POSITION.
         IF (VERIFY(ZEILE,'+-.edED0123456789 ') > 0) THEN
 ! "ZEILE" CONTAINS NEXT REACTION LINE
-          WRITE (IUNOUT,*)  'No POP_ESC found for internal CR model'
+          WRITE (IUNOUT,*)  'No POP_ESC, Q_EXT for internal CR model'
           WRITE (IUNOUT,*)  'REACTION',IR,'TYPE ',H123
           IREAD = 1
-          IROW_ESC = 0
-          ICOL_ESC = 0
-          POP_ESC = 1.0
+          M_POPESC = 0
+          M_UPPER = 0
+          M_LOWER = 0
         ELSE
 ! only integer or reals found in string ZEILE
 ! READ POPULATION ESCAPE FACTOR, FOR TRANSITION "UPPER=IROW --> LOWER=ICOL"
-          READ (ZEILE,66665) IROW_ESC, ICOL_ESC, POP_ESC
-          WRITE (IUNOUT,*)  'POP_ESC found for internal CR model'
-          WRITE (IUNOUT,*)  'REACTION',IR,'TYPE ',H123
-          WRITE (IUNOUT,'(A11,I3,A3,I3,A8,1E12.4)')
-     .                  ' TRANSITION ',IROW_ESC,'-->',ICOL_ESC,
-     .                  ' POP_ESC',     POP_ESC
+
+          READ (ZEILE,66666) M_POPESC, M_QEXT, M_UPPER, M_LOWER
+          IF (M_POPESC.GT.0) THEN
+            IF (ALLOCATED(IROW_ESC)) THEN
+              IF (SIZE(IROW_ESC) < M_POPESC) THEN
+                DEALLOCATE (IROW_ESC)
+                DEALLOCATE (ICOL_ESC)
+                DEALLOCATE (POP_ESC)
+              END IF
+            END IF
+            IF (.NOT.ALLOCATED(IROW_ESC)) THEN
+              ALLOCATE (IROW_ESC(M_POPESC), SOURCE = 0)
+              ALLOCATE (ICOL_ESC(M_POPESC), SOURCE = 0)
+              ALLOCATE (POP_ESC(M_POPESC), SOURCE = 1._DP)              
+            END IF
+          ELSE
+cdr  found: m_popesc=0
+          ENDIF
+          DO IPE=1,M_POPESC
+            READ (IUNIN,66665) 
+     .            IROW_ESC(IPE), ICOL_ESC(IPE), POP_ESC(IPE)
+            IF (IPE .EQ. 1) then
+              WRITE (IUNOUT,*)  'POP_ESC found for internal CR model'
+              WRITE (IUNOUT,*)  'REACTION',IR,'TYPE ',H123
+            ENDIF
+            WRITE (IUNOUT,'(A11,I3,A3,I3,A8,1E12.4)')
+     .                    ' TRANSITION ',IROW_ESC(IPE),'-->',
+     .                      ICOL_ESC(IPE),
+     .                    ' POP_ESC',     POP_ESC(IPE)
+          ENDDO
           IREAD = 0
+
+C  POP. ESC. FACTORS ARE ONLY AVAILABLE FOR INTERNAL CR MODELS
+
+C  now do the same for external source contributions
+          IF (M_QEXT.GT.0) THEN
+            IF (ALLOCATED(IROW_EXT)) THEN
+              IF (SIZE(IROW_EXT) < M_QEXT) THEN
+                DEALLOCATE (IROW_EXT)
+                DEALLOCATE (ITAL_EXT)
+              END IF
+            END IF
+            IF (.NOT.ALLOCATED(IROW_EXT)) THEN
+              ALLOCATE (IROW_EXT(M_QEXT), SOURCE = 0)
+              ALLOCATE (ITAL_EXT(3,M_QEXT), SOURCE = 0)
+            END IF
+          ELSE
+cdr found: m_qext=0
+          ENDIF
+          DO IPE=1,M_QEXT
+            READ (IUNIN,66666)
+     .            IROW_EXT(IPE), ITAL_EXT(1,IPE), ITAL_EXT(2,IPE),
+     .            ITAL_EXT(3,IPE)
+            IF (IPE .EQ. 1) then
+              WRITE (IUNOUT,*)  'Q_EXT tally for internal CR model'
+              WRITE (IUNOUT,*)  'REACTION',IR,'TYPE ',H123
+            ENDIF
+            WRITE (IUNOUT,'(A10,I3,A11,2(I3,1X))')
+     .           ' to LEVEL ',IROW_EXT(IPE),
+     .           ' use TALLY ',ITAL_EXT(1,IPE), ITAL_EXT(2,IPE), 
+     .           ITAL_EXT(3,IPE)
+          ENDDO
+          IREAD = 0
+
+C  Q_EXT  SOURCES ARE ONLY AVAILABLE FOR INTERNAL CR MODELS
+
         END IF
 C  POP. ESC. FACTORS ARE ONLY AVAILABLE FOR INTERNAL CRM MODELS
       END IF
+
+      IF (INDEX(ZEILE,'PHOTON') .NE. 0) THEN
+c       WRITE (IUNOUT,*)  'read_reaclines DATA FILE: PHOTON'
+c       WRITE (iunout,*)  'READ EXTRA LINE (LINEPROFILE FLAG) HERE'
+        read (iunin,'(12i6)') iprftype  ! april 22: was read_photdbk.f 
+        WRITE (IUNOUT,*)  'Photon:',IR,'Line shape: iprftype ',iprftype       
+      ENDIF
 
 C  ASYMPTOTICS FOR CROSS-SECTIONS OR (WEIGHTED) RATE COEFFICIENTS FOR REACTION IR
 
@@ -491,7 +598,7 @@ C  ASYMPTOTICS: DONE
 C
 C  SAVE INPUT LINES ON REACLINES, FOR WRITING ONTO JSON-FILE
 C       ONLY NEEDED FOR AUTOMATED INTERFACE TO HYDKIN DATABASE.
-
+Crc  not used at the moment, need revision as IL not used here but in read_json
       IL = IRLINES+1
       REACLINES(IL)%NO = IR
       REACLINES(IL)%FILE = FILNAM
@@ -514,16 +621,30 @@ C       ONLY NEEDED FOR AUTOMATED INTERFACE TO HYDKIN DATABASE.
       REACLINES(IL)%JFEX2MX = 0
       REACLINES(IL)%FP1 = 0._DP
       REACLINES(IL)%FP2 = 0._DP
-      REACLINES(IL)%IROW_ESC = IROW_ESC
-      REACLINES(IL)%ICOL_ESC = ICOL_ESC
-      REACLINES(IL)%POP_ESC = POP_ESC
+      REACLINES(IL)%M_POPESC = M_POPESC
+ 	    IF (M_POPESC >0) THEN
+        ALLOCATE(REACLINES(IL)%IROW_ESC(M_POPESC))
+        ALLOCATE(REACLINES(IL)%ICOL_ESC(M_POPESC))
+        ALLOCATE(REACLINES(IL)%POP_ESC(M_POPESC))
+         REACLINES(IL)%IROW_ESC(1:M_POPESC) = IROW_ESC(1:M_POPESC)
+         REACLINES(IL)%ICOL_ESC(1:M_POPESC) = ICOL_ESC(1:M_POPESC)
+         REACLINES(IL)%POP_ESC(1:M_POPESC) = POP_ESC(1:M_POPESC)
+      END IF
+      REACLINES(IL)%M_QEXT = M_QEXT
+      IF (M_QEXT >0) THEN
+        ALLOCATE(REACLINES(IL)%IROW_EXT(M_QEXT))
+        ALLOCATE(REACLINES(IL)%ITAL_EXT(3,M_QEXT))
+         REACLINES(IL)%IROW_EXT(1:M_QEXT) = IROW_EXT(1:M_QEXT)
+         REACLINES(IL)%ITAL_EXT(1:3,1:M_QEXT) = ITAL_EXT(1:3,1:M_QEXT)
+      END IF
       REACLINES(IL)%IFTFLG = IFTFLG
       REACLINES(IL)%NCOEF = NCOEF
-      REACLINES(IL)%COEF(1:NCOEF) = COEF(1:NCOEF)
+      IF (NCOEF > 0) REACLINES(IL)%COEF(1:NCOEF) = COEF(1:NCOEF)
       IRLINES = IL
 C  DONE
 
 66664 FORMAT (I6,6X,5E12.4)
 66665 FORMAT (2I6,4E12.4)
+66666 FORMAT (4I6)
       return
       end subroutine eirene_read_reaclines

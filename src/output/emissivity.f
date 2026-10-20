@@ -141,9 +141,10 @@ cdr  Each transition (line) can be
 cdr  assigned a population escape factor.
 cdr  This is then used for all calls to this CR code during the run,
 cdr  e.g. for both effective rate coefficients and line emission densities
-            if (reacdat(irc)%oth%ifit == 5) then
-              fpop_esc = reacdat(irc)%oth%crm%pop_esc
-            end if
+crc turned off for now
+!            if (reacdat(irc)%oth%ifit == 5) then
+!              fpop_esc = reacdat(irc)%oth%crm%pop_esc
+!            end if
 
             DO ICELL=1,NSBOX
 C

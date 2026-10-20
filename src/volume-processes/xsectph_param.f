@@ -1,6 +1,10 @@
 C  28.6.05
-C nnrot --> nrph, for subr. find_param, setamd, after removing phv_nrota,
-C                 and phv_nrotph
+c Counting reactions involving photons (ityp=0 test particles)
+C returns: only NRPH, for subr. find_param, setamd.
+c currently: no EI, CX, PI, EL reaction for photons so far.
+c Further NRPH reactions may be counted in XSECTP_PARAM, e.g. spont. photon emission
+c         from bulk particles, iswr(kk)=6 reactions.
+
 C
       SUBROUTINE EIRENE_XSECTPH_PARAM
 
@@ -25,12 +29,6 @@ csw
          endif
       enddo
 cdr
-c  this call is still necessary because not all PH process data
-c  have already been moved to module COMXS.
-C  Still some clean-up work to be done
-cdr
-      call EIRENE_PH_ALLOC_XSECTPH(nrph)
-
       RETURN
 
       END SUBROUTINE EIRENE_XSECTPH_PARAM

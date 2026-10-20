@@ -16,7 +16,7 @@ C
 ctk      REAL(DP), EXTERNAL :: RANF_EIRENE
 
       EMU=1.0_DP/(EMAX/UB+1.0_DP)
-      BETAD2=1.0_DP/((1.0_DP-EMU)*(1.0_DP-EMU))
+      BETAD2=1.0_DP/(1.0_DP-EMU)**2
 C
       A=RANF_EIRENE()
       ARG=A/BETAD2

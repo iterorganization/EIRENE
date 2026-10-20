@@ -106,6 +106,7 @@ CVK TABLES CHECKING (FOR CHARGE EXCHANGE)
       NRPII=0
       NREII=0
       NRRCI=0
+      NRPHI=0             
       NRBGI=0
 
 csw 27jul2011

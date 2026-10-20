@@ -4917,11 +4917,12 @@ csw mpi 07apr2010
      .               0,MPI_COMM_WORLD,ier)
       call mpi_bcast(NCOND, 1,MPI_INTEGER,
      .               0, MPI_COMM_WORLD,ier)
+      if (NCOND .GT. 0) then
       call mpi_bcast(condense_to(1),NCOND,
      .               MPI_INTEGER,0, MPI_COMM_WORLD,ier)
       call mpi_bcast(condense_from(1),NCOND,
      .               MPI_INTEGER,0, MPI_COMM_WORLD,ier)
-
+      endif
       call mpi_barrier(MPI_COMM_WORLD,ier)
       return
       end subroutine eirene_broadcast_infcop

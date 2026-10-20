@@ -17,7 +17,7 @@ cdr           It must be cleaned up and documented.
 
       USE EIRMOD_PRECISION, ONLY: DP
       USE EIRMOD_PARMMOD, ONLY: EIRENE_SET_PARMMOD, IFOFF, LOUTAPP,
-     >                          NRCX, NREC, NREI, NREL, NRPI,
+     >                          NRCX, NREC, NREI, NREL, NRPI, NRPH,
      >                          NBGK,
      >                          NSMSTRA, NTALB,
      >                          IUNMEM, IUNRAPSVEC, NLIMPS,
@@ -25,7 +25,7 @@ cdr           It must be cleaned up and documented.
       USE EIRMOD_COMUSR, ONLY: EIRENE_ALLOC_COMUSR,
      >                         EIRENE_DEALLOC_COMUSR, IITER, ITIMV,
      >                         NBGVI,
-     >                         NFILEK, NITER, NMODE, NTIME
+     >                         NFILEK, NFILEL, NITER, NMODE, NTIME
       USE EIRMOD_CREF, ONLY: EIRENE_DEALLOC_CREF
       USE EIRMOD_CESTIM, ONLY: EIRENE_ALLOC_CESTIM,
      >                         EIRENE_DEALLOC_CESTIM
@@ -47,7 +47,8 @@ cdr           It must be cleaned up and documented.
       USE EIRMOD_CZT1, ONLY: EIRENE_ALLOC_CZT1, EIRENE_DEALLOC_CZT1
       USE EIRMOD_CTRCEI, ONLY: EIRENE_ALLOC_CTRCEI,
      >                         EIRENE_DEALLOC_CTRCEI,
-     >                         TRCAMD, TRCSRC, TRCINT, I2TRC
+     >                         TRCAMD, TRCSRC, TRCINT, I2TRC,
+     >                         TRCSUR, TRCGRD, TRCFLE
       USE EIRMOD_CGEOM, ONLY: EIRENE_ALLOC_CGEOM, EIRENE_DEALLOC_CGEOM
       USE EIRMOD_CSDVI, ONLY: EIRENE_ALLOC_CSDVI, EIRENE_DEALLOC_CSDVI
       USE EIRMOD_CTETRA, ONLY: EIRENE_ALLOC_CTETRA,
@@ -70,8 +71,8 @@ cdr           It must be cleaned up and documented.
       USE EIRMOD_COUTAU, ONLY: EIRENE_ALLOC_COUTAU,
      >                         EIRENE_DEALLOC_COUTAU, NFSTVI
       USE EIRMOD_COMXS, ONLY: EIRENE_ALLOC_COMXS, EIRENE_DEALLOC_COMXS,
-     >                        NRCXI, NREII, NRELI, NRPII, NRRCI,
-     >                        NRBGI
+     >                        NRCXI, NREII, NRELI, NRPII, NRRCI, NRPHI,
+     >                        NRBGI, NCR_REAC
       USE EIRMOD_CSPEI, ONLY: EIRENE_ALLOC_CSPEI, EIRENE_DEALLOC_CSPEI
       USE EIRMOD_CTRIG, ONLY: EIRENE_ALLOC_CTRIG, EIRENE_DEALLOC_CTRIG
       USE EIRMOD_CLAST, ONLY: EIRENE_ALLOC_CLAST, EIRENE_DEALLOC_CLAST
@@ -80,7 +81,8 @@ cdr           It must be cleaned up and documented.
       USE EIRMOD_SECOND_OWN, ONLY: EIRENE_RESET_SECOND,
      >                             EIRENE_SECOND_OWN
       USE EIRMOD_LININT, ONLY: EIRENE_LININT2
-      USE EIRMOD_COLRAD, ONLY: EIRENE_DEALLOC_COLRAD
+      USE EIRMOD_COLRAD, ONLY: EIRENE_DEALLOC_COLRAD,
+     >                         EIRENE_COLRAD
       USE EIRMOD_MCARLO
       USE EIRMOD_LOCATE, ONLY: EIRENE_LOCAT2
       USE EIRMOD_SAMSRF, ONLY: EIRENE_SAMSF2
@@ -100,7 +102,7 @@ cdr           It must be cleaned up and documented.
 
       PRIVATE
       PUBLIC :: EIRENE_EIRENE, EIRENE_EIRENE_COUPLE,
-     .          EIRENE_EIRENE_REINIT
+     .          EIRENE_EIRENE_REINIT, DBG_PRINTOUT
 
       integer, save :: inentry=1, init_log=0, init_open=0
       REAL(DP) :: DUMMY, TIMI
@@ -130,7 +132,7 @@ C
       LOGICAL, INTENT(IN) :: NLMODE, NLLAST, MPI_INITIALIZE
       INTEGER, INTENT(IN) :: ITNR
 
-      INTEGER :: IER
+      INTEGER :: IER, INALL
       logical :: op
       character(20), save :: outname
       character(6), save :: outpos
@@ -293,7 +295,8 @@ C
       LOGICAL, INTENT(IN) :: NLLAST, MPI_INITIALIZE
       INTEGER, INTENT(IN) :: ITNR
 
-      INTEGER :: IER, ISTRAI
+      INTEGER :: IER, ISTRAI, INALL
+      REAL(DP) :: res
       logical :: nlplas_save
       EXTERNAL :: EIRENE_AMDIAG, EIRENE_BROADCAST,
      .            EIRENE_COUPLE_POST_INPUT, EIRENE_DIAGNO, EIRENE_ERGOD,
@@ -454,6 +457,7 @@ C
           WRITE (iunout,*) 'NRELI,NREL ',NRELI,NREL
           WRITE (iunout,*) 'NRPII,NRPI ',NRPII,NRPI
           WRITE (iunout,*) 'NREII,NREI ',NREII,NREI
+          WRITE (iunout,*) 'NRPHI,NRPH ',NRPHI,NRPH
           WRITE (iunout,*) 'NRRCI,NREC ',NRRCI,NREC
           CALL EIRENE_LEER(1)
         ENDIF
@@ -587,11 +591,16 @@ c
 
 
 C  POSTPROCESSING FOR BACKGROUND TALLIES, E.G. FOR DIAGNO, ITERATION, ETC.
-      CALL EIRENE_PLASMA_DERIV(1)
+      INALL=0
+      CALL EIRENE_PLASMA_DERIV(1,INALL)
 C  PRINT THOSE BACKGROUND TALLIES WHICH HAVE BEEN MODIFIED
 C  IN PLASMA_DERIV(1)
-      CALL EIRENE_OUTPLA(1)
-
+cdr march 2023:
+cdr   CALL EIRENE_OUTPLA(1) ! moved further down, to also capture BGK virtual background species
+cdr   for this we need to set a "densmodel" in case of BGK
+cdr   or photon iterations
+cdr   BGK virtual species are just special "densmodel" field particle species.
+cdr   This is now done in outpla, for the time being
       END IF  ! MY_PE == 0
 C
 C  ITERATIVE MONTE CARLO PROBLEM: EIRENE RECALL OPTION
@@ -611,6 +620,13 @@ C
         IF (MY_PE == 0) THEN
 cdr  are there any nonlinear "BGK" reactions?
           IF (NBGK > 0) CALL EIRENE_MODBGK
+cdr  next call: to be replaced by a modbgk_ph, which does just this
+cdr  first parameter <=0: do only the initialization,
+cdr  after iteration IITER
+cdr  as well as refreshing field particles with COLRAD density model
+          IF (ANY(NCR_REAC(:) > 0)) THEN
+            call eirene_colrad(-iiter,1,res)
+          END IF
           CALL EIRENE_MODUSR
 CVK ADDITIONAL PRINTOUT
           IF(TRCINT) THEN
@@ -624,17 +640,37 @@ CVK END
 #endif
         IITER=IITER+1
         IF (IITER.LE.NITER) THEN
+cdr  turn off some geometrical diagnostic printout
+cdr  in further iterations
+          trcgrd=.false.
+          trcsur=.false.
+          trcamd=.false.
+cdr: not sure: try also with short form of fort.13
+          NFILEL=3
+          CALL EIRENE_WRPLAM(TRCFLE,'FOR IITER')
 cdr  prepare next internal iteration
           DUMMY=EIRENE_RESET_SECOND()
           IPRNLI=0
           CALL EIRENE_CHECK_EXIT
           CALL MPI_BARRIER(MPI_COMM_WORLD,IER)
           GOTO 101
-        ENDIF
+        ELSE
+cdr  may, 2025:         
+cdr  all internal iterations done 
+          write (iunout,*) 'FINAL IITER= ',IITER-1,' DONE'
+CDR  SAVE LAST INTERNAL ITERATION ON FORT.13, FOR LATER CONTINUATION
+CDR  OF EIRENE ITERATIONS           
+          CALL EIRENE_WRPLAM(TRCFLE,'EIRENE')         
+        ENDIF       
       ENDIF
 #if ( defined(USE_EXT_OPENMP) && !defined(USE_OPENMP) )
 !$OMP MASTER
 #endif
+C  AFTER LAST INTERNAL ITERATION
+C  PRINT THOSE BACKGROUND TALLIES WHICH HAVE BEEN MODIFIED
+C  IN PLASMA_DERIV(1) CALLED FROM MODUSR, MODBGK, ETC.
+      CALL EIRENE_OUTPLA(1)
+
       IF (MY_PE == 0) THEN
 C
 C  CALL DIAGNOSTIC MODULE (COMPUTE LINE INTEGRALS FROM EIRENE TALLIES)

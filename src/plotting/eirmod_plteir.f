@@ -678,7 +678,8 @@ C
                   END DO
                   JJTAL = KK
                 END IF
-                CALL EIRENE_FETCH_OUTAU (OUTAUI,JJTAL,ISPZ,ISTRA,IUNOUT)
+                CALL EIRENE_FETCH_OUTAUI (OUTAUI,JJTAL,ISPZ,ISTRA,
+     .           IUNOUT)
                 IF (OUTAUI.EQ.0.) THEN
                   IF (TRCPLT) THEN
                     WRITE (iunout,*) 'TALLY NO. ',JTAL,

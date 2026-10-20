@@ -2,14 +2,14 @@ CDR  NOV 17 : lemtspw arguments corrected
 cdr  jan 18 : start to implement bi-directional reflectance functions
 cdr  dec.18 : remove unfinished "hollmann database model"
 cpb  oct.19 : set ISPZO=ISPZ for default reflection model
-C
+cdr  oct 21 : ilref=1 model: partial absorbing, cosine, specular
 C
 C
 C  REFLECT ESCAPING PHOTONS
 C  INPUT:
 C       ILREF = 0  PERFECT ABSORPTION
-C       ILREF = 1  ERIC HOLLMAN (EXPERIMENTAL) DATABASE (not in use)
-C       ILREF = 2  BI-DIRECTIONAL REFLECTANCE FUNCTION
+C       ILREF = 1  PARTIAL REFLECTION, SPECULAR PLUS COSINE COMPONENTS
+C       ILREF = 2  BI-DIRECTIONAL REFLECTANCE FUNCTION: tbd.  currently: absorb.
 C
 C       ITYP  = 0  INCIDENT PHOTON
 C  OUTPUT:
@@ -76,7 +76,7 @@ C
       INTEGER, SAVE :: NPANOLD=0
       INTEGER :: MODREF, ISPZO,
      .           MSS, IDUMMY
-      REAL(DP) :: DUMMY, XMW, XCW,
+      REAL(DP) :: DUMMY, XMW, XCW, COSI2,
      .            EXPP, EXPE, EXPI, RINTG, EINTG, AINTG, COSIN,
      .            THETA_OUT=0._DP, ALPHA_OUT=0._DP,
      .            FR1, ZCPHI, ZSPHI, ZCTHET, ZSTHET, VX, VY, VZ,
@@ -107,23 +107,23 @@ C
 C  SURFACE NUMBER  : MSURF (MSURF=0: DEFAULT MODEL)
 C  SPECIES INDEX   : ISPZ
 C
-      MODREF=EIRENE_IDEZ(ILREF(MSURF),2,2)
+cdr fix ph2
+      ISPZO=ISPZ
+      MODREF=ILREF(ISPZ,MSURF)
       XMW=ZNML(MSURF)
       XCW=ZNCL(MSURF)
 C
 C
 C   MODREF=0: "PERFECTLY ABSORBING SURFACE", DEFAULT
-C   MODREF=1: "DATABASE REFLECTION MODEL" (out)
+C   MODREF=1: "PARTIALLY ABSORBING, SPECULAR OR COSINE"
 C
-!PB  to be revised
+
 !    RPROB: probability of the photon to be reflected
       RPROB = 0._dp
 
-      IF (MODREF.EQ.1) THEN
-        GOTO 992  ! THIS MODEL IS CURRENTLY NOT AVAILABLE
-      ELSEIF (MODREF.EQ.2) THEN
-
-CDR BDRF MODEL, WITH GAUSSIAN LOBE IN SPECULAR PART AND LAMBERTIAN IN THERMAL PART
+      IF (MODREF.EQ.1.or.MODREF.EQ.2) THEN
+CDR MODREF=1 simple specular, or cosine or absorb:  recycf--> recyct --> 1.0
+CDR modreF=2 BDRF MODEL, WITH GAUSSIAN LOBE IN SPECULAR PART AND LAMBERTIAN IN THERMAL PART
 
 cdr reflected (specular) fraction
         PRFCF=max(0._DP,(min(1._DP,RECYCF(ISPZ,MSURF))))
@@ -145,30 +145,39 @@ cdr parameters for bi-directional reflectance function
         EINTG=EINTEG(MSURF)
         AINTG=AINTEG(MSURF)
         ISPZO=ISPZ
+      ENDIF
 C
 C
+      IF (MODREF.EQ.1) THEN
+cdr: tbd.: suppression of absorption. Coding: See below
 C   TENTATIVELY ASSUME REFLECTION
         LGPART=.TRUE.
 
 C   CHECK FOR ABSORPTION, LAMBERTIAN OR SPECULAR COMPONENT
         ZEP1=ranf_eirene()
-        IF (ZEP1.GT.PRFCT) THEN
+        IF (ZEP1.GT.PRFCT) THEN  ! (PRFCT < ZEP1 <= 1)
 C   ABSORPTION
           GOTO 700
         ELSEIF (ZEP1.GT.PRFCF) THEN
 C   LAMBERTIAN (COSINE) DISTRIBUTION
           GOTO 600
-        ELSE
+        ELSE                     ! (0 < ZEP1 <= PRFCF)
 C   COSINE OF ANGLE OF INCIDENCE against outer normal
           COSIN=VELX*CRTX+VELY*CRTY+VELZ*CRTZ
           IF (COSIN.LT.0.D0) GOTO 993
+C   PURELY SPECULAR REFLECTION
+          COSI2=-(COSIN+COSIN)
+          VELX=VELX+COSI2*CRTX
+          VELY=VELY+COSI2*CRTY
+          VELZ=VELZ+COSI2*CRTZ
+          RETURN
         ENDIF
+      ENDIF
 
-c  SPECULAR LOBE, BDRF MODEL.
-        GOTO 600
-      ELSE   ! modref gt 2
-C  ABSORB THIS PHOTON
-        ISPZO = ISPZ
+      IF (MODREF.GE.2) THEN
+c  SPECULAR LOBE, BDRF MODEL. UNFINISHED
+c  because ilref=2 is the default, for all test particles, here
+c  we use absorption as default for photons.
         GOTO 700
       ENDIF
 C
@@ -219,9 +228,17 @@ C
 C
 C   LAMBERTIAN (COSINE DISTRIBUTION)
 C
+      IF (INIV4.LE.0) CALL EIRENE_FCOSIN
+      VX=FC1(INIV4)
+      VY=FC2(INIV4)
+      VZ=FC3(INIV4)
+      INIV4=INIV4-1
+c  /vx,vy,vz/ is cosine distributed around surface normal vector/-1,0,0/
+      CALL EIRENE_ROTATF (VELX,VELY,VELZ,VX,VY,VZ,CRTX,CRTY,CRTZ)
+      RETURN
+C
+Cdr  unfinished option.... rc: which one?
 C  POLAR ANGLE OF REFLECTION (THETA)
-C
-C
       ZCTHET=COS(THETA_OUT)
 C  LIMIT COSINE OF POLAR ANGLE TO 85. DEGREES
 C  (I.E., 5 DEGREES AGAINST SURFACE TANGENTIAL PLANE)

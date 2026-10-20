@@ -1981,7 +1981,7 @@
         i1=ilspt(j)
         get_crt_value=2
       case (4)
-        i1=ilref(j)
+        i1=ilref(isp,j)
         get_crt_value=2
       case (5)
         r1=recycc(isp,j)

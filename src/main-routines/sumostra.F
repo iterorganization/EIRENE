@@ -807,7 +807,6 @@ C
         SPTIPLI(IPLS,0)=SPTIPLI(IPLS,0)+SPTIPLI(IPLS,ISTRA)
         SPTPHPLI(IPLS,0)=SPTPHPLI(IPLS,0)+SPTPHPLI(IPLS,ISTRA)
         SPTPPLI(IPLS,0)=SPTPPLI(IPLS,0)+SPTPPLI(IPLS,ISTRA)
-
 cdr vectorial tallies, sum over strata for each component
         DO ICO=0,2
           KK=ICO*NPLS

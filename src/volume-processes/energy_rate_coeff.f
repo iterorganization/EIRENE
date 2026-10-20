@@ -85,7 +85,7 @@ cdr            LEXP=.true.
                                     ! But should come from database
      .                  xlnelch =-43.2777390821    !ln(elcha)
       integer :: jfex1mn, jfex1mx, jfex2mn, jfex2mx
-      integer :: ip1, ip2, iflavor, ivar
+      integer :: ip1, ip2, icrm, ivar, iform
       external :: EIRENE_sngl_poly
 
       interface
@@ -272,15 +272,18 @@ c..............................................................
       else if (reacdat(ir)%rtcew%ifit == 5) then
 
 ! INTERNAL COLLISION RADIATIVE CODE
+c  returns rates, rate coefs, etc, not LN or LOG of rates
 
-c  convert parameters p1, p2 to exp(p1), exp(p2): PP1,PP2
+c  convert (log) parameters p1, p2 to exp(p1), exp(p2): PP1,PP2
         PP1 = EXP(P1)
         PP2 = EXP(P2)
 
-        iflavor = reacdat(ir)%rtcew%crm%iflav
+        icrm = reacdat(ir)%rtcew%crm%iflav
         ivar = reacdat(ir)%rtcew%crm%ivarst
+        iform = reacdat(ir)%rtcew%crm%iformul
 
-        CALL EIRENE_COLRAD(IR, IFLAVOR, IVAR, IC, PP1, PP2, RES)
+        CALL EIRENE_COLRAD(IR, ICRM, RES,
+     .                     IFORM, IVAR, IC, PP1, PP2)
 
 !  electron energy-weighted loss rates are taken positive in CRM COLRAD, and negative if
 !  it is a gain. For negative (i.e. gain) rates, the log(e-rate) return is not possible.
@@ -288,9 +291,13 @@ c  convert parameters p1, p2 to exp(p1), exp(p2): PP1,PP2
 
         IF (LEXP) then
           erate = res
+c  not exp: return log of rate
         elseif (res.gt.0.0) then
           erate = log(res)
+        elseif (res.eq.0.0) then
+          erate =-50.
         else
+          write (iunout,*) 'erate_coef, KK ',IR
           write (iunout,*) 'wrong sign from cr model'
           write (iunout,*) 'p1,p2,erate ',pp1,pp2,res
           write (iunout,*) 'return exp(-50)'

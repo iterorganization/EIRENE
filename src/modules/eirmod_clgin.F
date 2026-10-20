@@ -28,7 +28,7 @@ cdr  rlwmn, rlwmx: weight window for surface. Currently unused
 
       INTEGER, PUBLIC, ALLOCATABLE, SAVE ::
      I ILSWCH(:),     ILEQUI(:),     ILTOR(:),
-     I ILSIDE(:),     ILIIN(:),      ILREF(:),
+     I ILSIDE(:),     ILIIN(:),      ILREF(:,:),
      I ILSPT(:),      ILCOL(:),      ILFIT(:),
      I ILCELL(:),     ILBOX(:),      ILPLG(:),
      I ISPUT(:,:),
@@ -93,7 +93,7 @@ cdr  rlwmn, rlwmx: weight window for surface. Currently unused
       ALLOCATE (ILTOR(0:NLIMPS))
       ALLOCATE (ILSIDE(0:NLIMPS))
       ALLOCATE (ILIIN(0:NLIMPS))
-      ALLOCATE (ILREF(0:NLIMPS))
+      ALLOCATE (ILREF(NSPZ,0:NLIMPS))
       ALLOCATE (ILSPT(0:NLIMPS))
       ALLOCATE (ILCOL(0:NLIMPS))
       ALLOCATE (ILFIT(0:NLIMPS))
@@ -130,7 +130,7 @@ cdr  rlwmn, rlwmx: weight window for surface. Currently unused
 
       WRITE (IUNMEM,'(A,T25,I15)')
      .       ' CLGIN ',(NLIMPS+1)*(13*NSPZ+9)*8 +
-     .                 (2*NOPTIM+(NLIMPS+1)*(14+9+5*NSPZ)+9*NSTS+
+     .                 (2*NOPTIM+(NLIMPS+1)*(14+9+6*NSPZ)+9*NSTS+
      .                  (N1ST+1)*(N2ND+1)*(N3RD+1)*3)*4 +
      .                 ((NLIMPS+1)*(2+2*NLIMPB)+
      .                  NLIMPB*(NOPTIM+1))*4+
@@ -242,7 +242,7 @@ c
       ILTOR  = 0
       ILSIDE = 0
       ILIIN  = 1
-      ILREF  = 2
+      ILREF  = 2   ! warning: for photon species: ilref=2 not ready, absorbing. better use ilref=1
       ILSPT  = 0
       ILCOL  = 1
       ILFIT  = 0
@@ -369,7 +369,8 @@ C  DEFAULT TOROIDAL INDICES FOR "NON-DEFAULT STANDARD SURFACES"
       CALL MPI_BCAST (ILTOR ,NLIMPS+1,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
       CALL MPI_BCAST (ILSIDE,NLIMPS+1,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
       CALL MPI_BCAST (ILIIN ,NLIMPS+1,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
-      CALL MPI_BCAST (ILREF ,NLIMPS+1,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
+      CALL MPI_BCAST (ILREF ,NSPZ*(NLIMPS+1),
+     .                MPI_INTEGER,0,MPI_COMM_WORLD,ier)
       CALL MPI_BCAST (ILSPT ,NLIMPS+1,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
       CALL MPI_BCAST (ILCOL ,NLIMPS+1,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
       CALL MPI_BCAST (ILFIT ,NLIMPS+1,MPI_INTEGER,0,MPI_COMM_WORLD,ier)

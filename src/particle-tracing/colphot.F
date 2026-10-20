@@ -174,23 +174,19 @@ C
 C
 C   FIND SPECIES INDEX OF BULK COLLISION PARTNER
         SIGSUM=SIGEIT+SIGCXT+SIGELT
-        DO IAPH=1,PHV_NPHOTI(IPHOT)-1
-          IRPH=PHV_LGPHOT(IPHOT,IAPH,0)
-          IPLS=PHV_LGPHOT(IPHOT,IAPH,1)
-          KK  =PHV_LGPHOT(IPHOT,IAPH,3)
-          UPDF=PHV_LGPHOT(IPHOT,IAPH,4)
+        DO IAPH=1,NPHPHI(IPHOT)-1
+          IRPH=LGPHPH(IPHOT,IAPH,0)
+          IPLS=LGPHPH(IPHOT,IAPH,1)
           SIGSUM=SIGSUM+SIGVPH(IRPH)
           IF (ZEP1.LT.SIGSUM) GOTO 1272
         enddo
-        IRPH=PHV_LGPHOT(IPHOT,PHV_NPHOTI(IPHOT),0)
-        IPLS=PHV_LGPHOT(IPHOT,PHV_NPHOTI(IPHOT),1)
-        KK  =PHV_LGPHOT(IPHOT,PHV_NPHOTI(IPHOT),3)
-        UPDF=PHV_LGPHOT(IPHOT,PHV_NPHOTI(IPHOT),4)
+        IRPH=LGPHPH(IPHOT,NPHPHI(IPHOT),0)
+        IPLS=LGPHPH(IPHOT,NPHPHI(IPHOT),1)
  1272   CONTINUE
 C
 C  ARE THERE SECONDARY TEST PARTICLES AT ALL?
-        FRSTP=dble(PHV_N1STOTph(iphot,IRPH,3))
-        SCNDP=dble(PHV_N2NDOTph(iphot,IRPH,3))
+        FRSTP=dble(N1STPH(IRPH,3))
+        SCNDP=dble(N2NDPH(IRPH,3))
         SUMP=frstp+scndp
         IF (SUMP.LE.EPS30) THEN
           LGPART=.FALSE.
@@ -201,12 +197,12 @@ C  ARE THERE SECONDARY TEST PARTICLES AT ALL?
         ENDIF
 
 csw check type first secondary
-         if(phv_n1stotph(iphot,IRPH,1) == 4) then
-            t1=phv_n2ndotph(iphot,IRPH,1)
+         if(N1STPH(IRPH,1) == 4) then
+            t1=N2NDPH(IRPH,1)
             select case(t1)
             case(0)
 csw check ipl
-               if(phv_n2ndotph(iphot,IRPH,2) == 0) then
+               if(N2NDPH(IRPH,2) == 0) then
                   lgpart=.false.
                   ityp=4
                   coltyp=2
@@ -222,12 +218,12 @@ csw check ipl
             end select
          endif
 csw check type second secondary
-         if(phv_n2ndotph(iphot,IRPH,1) == 4) then
-            t1=phv_n1stotph(iphot,IRPH,1)
+         if(N2NDPH(IRPH,1) == 4) then
+            t1=N1STPH(IRPH,1)
             select case(t1)
             case(0)
 csw check ipl
-               if(phv_n1stotph(iphot,IRPH,2) == 0) then
+               if(N1STPH(IRPH,2) == 0) then
                   lgpart=.false.
                   ityp=4
                   coltyp=2
@@ -252,10 +248,10 @@ C  I.E., NO RANDOM DECISION BETWEEN BULK AND TEST SECONDARIES
         IF (ZEP3.LE.FRSTP) THEN
 C  FOLLOW FIRST SECONDARY, SPEED FROM BULK POPULATION
 csw no  coll.estim.
-            IF (PHV_IESTOTph(iphot,IRPH,1).NE.0) goto 999
-            IF (PHV_IESTOTph(iphot,IRPH,2).NE.0) goto 999
-            IF (PHV_IESTOTph(iphot,IRPH,3).NE.0) goto 999
-            ITYP=PHV_N1STOTph(iphot,IRPH,1)
+            IF (IESTph(IRPH,1).NE.0) goto 999
+            IF (IESTph(IRPH,2).NE.0) goto 999
+            IF (IESTph(IRPH,3).NE.0) goto 999
+            ITYP=N1STPH(IRPH,1)
             write (iunout,*)
      .        'OT not ready for photons. exit from collide'
             call EIRENE_exit_own(1)
@@ -266,7 +262,7 @@ c    .           iold,0,velxo,velyo,velzo,velo,e0o,ityp)
 C
           CASE(0)
 C  1ST secondary is PHOTON, E0 set by PH_POST_ENERGY
-            IPHOT=PHV_N1STOTph(iphot,IRPH,2)
+            IPHOT=N1STPH(IRPH,2)
 c  implement generation limit in the future...?
             COLTYP=1
             NCELL=NCLLO
@@ -274,7 +270,7 @@ c  implement generation limit in the future...?
 C
           CASE(1)
 C  1ST SECONDARY IS ATOM
-            IATM=PHV_N1STOTph(iphot,IRPH,2)
+            IATM=N1STPH(IRPH,2)
             E0=CVRSSA(IATM)*VEL*VEL
 C
 C
@@ -284,7 +280,7 @@ C
 
           CASE(2)
 C  1ST SECONDARY IS MOLECULE
-            IMOL=PHV_N1STOTph(iphot,IRPH,2)
+            IMOL=N1STPH(IRPH,2)
             E0=CVRSSM(IMOL)*VEL*VEL
             XGENER=0.D0
 C
@@ -294,7 +290,7 @@ C
 
           CASE(3)
 C  1ST SECONDARY IS TEST ION
-            IION=PHV_N1STOTph(iphot,IRPH,2)
+            IION=N1STPH(IRPH,2)
             E0=CVRSSI(IION)*VEL*VEL
             XGENER=0.D0
 C
@@ -304,7 +300,7 @@ C
 c
           case(4)
             lgpart=.false.
-            ipls=phv_n1stotph(iphot,IRPH,2)
+            ipls=N1STPH(IRPH,2)
             e0=cvrssp(ipls)*vel*vel
 
             coltyp=2
@@ -319,10 +315,10 @@ c
         ELSE
 C  FOLLOW 2ND SECONDARY, SPEED OF PREVIOUS TEST PARTICLE
 csw no coll.estim.
-            IF (PHV_IESTOTph(iphot,IRPH,1).NE.0) GOTO 999
-            IF (PHV_IESTOTph(iphot,IRPH,2).NE.0) GOTO 999
-            IF (PHV_IESTOTph(iphot,IRPH,3).NE.0) GOTO 999
-            ITYP=PHV_N2NDOTph(iphot,IRPH,1)
+            IF (IESTph(IRPH,1).NE.0) GOTO 999
+            IF (IESTph(IRPH,2).NE.0) GOTO 999
+            IF (IESTph(IRPH,3).NE.0) GOTO 999
+            ITYP=N2NDPH(IRPH,1)
             vel=velo
             write (iunout,*)
      .        'ot not ready for photons. exit from collide '
@@ -334,7 +330,7 @@ c    .           iold,0,velxo,velyo,velzo,velo,e0o,ityp)
           SELECT CASE(ITYP)
 C
           CASE(0)
-            IPHOT=PHV_N2NDOTph(iphot,IRPH,2)
+            IPHOT=N2NDPH(IRPH,2)
             XGENER=0.D0
 csw e0 set by ph_post energy
             coltyp=1
@@ -343,7 +339,7 @@ csw e0 set by ph_post energy
 
 C
             CASE(1)
-              IATM=PHV_N2NDOTph(iphot,IRPH,2)
+              IATM=N2NDPH(IRPH,2)
               XGENER= 0.D0
 C
               E0=CVRSSA(IATM)*VEL*VEL
@@ -352,7 +348,7 @@ C
               RETURN
 C
             CASE(2)
-              IMOL=PHV_N2NDOTph(iphot,IRPH,2)
+              IMOL=N2NDPH(IRPH,2)
               XGENER= 0.D0
 C
               E0=CVRSSM(IMOL)*VEL*VEL
@@ -361,7 +357,7 @@ C
               RETURN
 C
             CASE(3)
-              IION=PHV_N2NDOTph(iphot,IRPH,2)
+              IION=N2NDPH(IRPH,2)
               XGENER=0.D0
 C
               E0=CVRSSI(IION)*VEL*VEL
@@ -370,7 +366,7 @@ C
               RETURN
 c
             case(4)
-              ipls=phv_n2ndotph(iphot,IRPH,2)
+              ipls=N2NDPH(IRPH,2)
               lgpart=.false.
               ityp=4
               e0=cvrssp(ipls)*vel*vel

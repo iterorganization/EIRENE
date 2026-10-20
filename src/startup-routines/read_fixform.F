@@ -138,26 +138,89 @@ C
      .             RC2MIN, RC2MAX, FP2, JFEX2MN, JFEX2MX,
 ! for ADAS type data tables
      .             ELNAME, IZ1, BUNDLING,
-! for internal CR models, line emission etc..
+cdr  optional parameters
+     .             M_popesc, M_upper, M_lower,  ! for internal CR models, line emission etc..
      .             IROW_ESC, ICOL_ESC, POP_ESC,
-! optional arguments for FILNAM=CONST options
-     .             IFTFL, NCOEF, COEF)
+cdr  optional parameters
+     .             M_qext,                      ! for internal CR models, line emission etc..
+     .             IROW_EXT, ITAL_EXT,
+cdr  optional arguments for FILNAM=CONST options
+     .             IFTFL, NCOEF, COEF,
+cdr  optional arguments for FILNAM=PHOTONS options
+     .             IPRFTYPE)
+
         USE EIRMOD_PRECISION
-        INTEGER,      INTENT(IN) :: IR, IZ1
-        INTEGER,      INTENT(IN), OPTIONAL :: IROW_ESC, ICOL_ESC,
-     .                                        IFTFL, NCOEF
-        REAL(DP),     INTENT(IN), OPTIONAL :: POP_ESC
-        REAL(DP),     INTENT(IN), OPTIONAL :: COEF(9)
-        CHARACTER(LEN=*), INTENT(IN), OPTIONAL :: BUNDLING
+        INTEGER,      INTENT(IN) :: IR
         CHARACTER(8), INTENT(IN) :: FILNAM
         CHARACTER(4), INTENT(IN) :: H123
         CHARACTER(LEN=*), INTENT(IN) :: REAC
-        CHARACTER(2), INTENT(IN) :: ELNAME
         CHARACTER(3), INTENT(IN) :: CRC
-        INTEGER,  INTENT(IN OUT) :: JFEX1MN, JFEX1MX, JFEX2MN, JFEX2MX
+c  optional input for slreac: TAB2D or ADAS model data
+        INTEGER,      INTENT(IN) :: IZ1
+        CHARACTER(2), INTENT(IN) :: ELNAME
+c  optional input for slreac: CR model data
+        INTEGER,      INTENT(IN), OPTIONAL :: M_popesc, M_upper,
+     .                                           M_lower
+        INTEGER,      INTENT(IN), OPTIONAL :: IROW_ESC(:),
+     .                                           ICOL_ESC(:)
+        REAL(DP),     INTENT(IN), OPTIONAL :: POP_ESC(:)
+c  optional input for slreac: CR model data
+        INTEGER,      INTENT(IN), OPTIONAL :: M_qext
+        INTEGER,      INTENT(IN), OPTIONAL :: IROW_EXT(:),
+     .                                           ITAL_EXT(:,:)
+c  optional input for slreac: filnam=CONST option
+        INTEGER,      INTENT(IN), OPTIONAL :: IFTFL, NCOEF
+        REAL(DP),     INTENT(IN), OPTIONAL :: COEF(9)
+c  optional input for slreac: filnam=PHOTONS option
+        INTEGER,      INTENT(IN), OPTIONAL :: IPRFTYPE
+        CHARACTER(LEN=*), INTENT(IN), OPTIONAL :: BUNDLING
+        INTEGER,  INTENT(IN OUT) :: JFEX1MN, JFEX1MX,JFEX2MN, JFEX2MX
         REAL(DP), INTENT(IN OUT) :: RC1MIN, RC1MAX, FP1(6),
      .                              RC2MIN, RC2MAX, FP2(6)
         END SUBROUTINE EIRENE_SLREAC
+
+
+        subroutine eirene_read_reaclines (ZEILE, iunin, iunout, iread,
+     .           ir, filnam, h123, reac, crc, mp, mt, dpp,
+     .           rc1min, rc1max, jfex1mn, jfex1mx, fp1,
+     .           rc2min, rc2max, jfex2mn, jfex2mx, fp2,
+     .           iz, elname, bundling,
+     .           m_popesc, m_upper, m_lower,
+     .           irow_esc, icol_esc, pop_esc,
+     .           m_qext,
+     .           irow_ext, ital_ext,
+     .           iftfl, ncoef, coef,
+     .           iprftype)
+         USE EIRMOD_PRECISION
+         character(420), intent(inout) :: zeile
+         integer, intent(inout) :: iread
+         integer, intent(in) :: iunin, iunout
+c
+         integer, intent(out) :: ir, mp, mt,
+     .                           jfex1mn, jfex1mx, jfex2mn, jfex2mx
+         real(dp), intent(out) :: dpp, rc1min, rc1max, rc2min, rc2max
+         real(dp), intent(out) :: fp1(6), fp2(6)
+         character(8), intent(out) :: filnam
+         character(4), intent(out) :: h123
+         character(50), intent(out) :: reac
+         character(3), intent(out) :: crc
+
+cdr  additionaly read, in case filnam = TAB2D, ADAS,...
+         integer, intent(out) :: iz
+         character(2), intent(out) :: elname
+         character(60), intent(out) :: bundling
+cdr  additionally read, in case filnam = CR...
+         integer, intent(out) :: m_popesc, m_upper, m_lower
+         integer, allocatable, intent(out) :: irow_esc(:), icol_esc(:)
+         real(dp), allocatable, intent(out) :: pop_esc(:)
+         integer, intent(out) :: m_qext
+         integer, allocatable, intent(out) :: irow_ext(:), ital_ext(:,:)
+cdr  additionally read, in case filnam = CONST
+         integer, intent(out) :: iftfl, ncoef
+         real(dp), intent(out) :: coef(9)
+cdr  additionally read, in case filnam = PHOTONS
+         integer, intent(out) :: iprftype
+        end subroutine eirene_read_reaclines
       END INTERFACE
 
       TYPE(TRANSFORM), POINTER :: TRF
@@ -170,7 +233,8 @@ C
      .          DPP, SPCMN, SPCMX, SPC_SHIFT,
      .          SPCPLT_X, SPCPLT_Y, SPCPLT_SAME, SPCVX, SPCVY, SPCVZ,
      .          VNORM, ESCD2A, ESCD2M, ESCD2I, ESCD2PH, ESCD2P,
-     .          RC1MIN, RC1MAX, RC2MIN, RC2MAX, POP_ESC, DUMMY
+     .          RC1MIN, RC1MAX, RC2MIN, RC2MAX, DUMMY
+      REAL(DP), ALLOCATABLE :: POP_ESC(:)
 c
 C  MULTIPLIER FOR BOTH CPU TIME NTCPU AND MAX NUMBER OF MC HISTORIES NPTS, ....
       REAL(DP) :: AMPTS
@@ -197,9 +261,13 @@ C  MULTIPLIER FOR BOTH CPU TIME NTCPU AND MAX NUMBER OF MC HISTORIES NPTS, ....
      .           JFEX1MN, JFEX1MX, JFEX2MN, JFEX2MX,
      .           IRC, IOPT, ITAL, IRE,
      .           IADV, NUM_COMPO, NUM_CONTRIB, IDMDL, IND,
-     .           ILINE, JCOMP, KCONTR, IROW_ESC, ICOL_ESC,
+     .           ILINE, JCOMP, KCONTR,
      .           IFTFL, NCOEF, ITLV, ITLS,
-     .           KK, ELONLY
+     .           KK, ELONLY,
+     .           M_POPESC, M_UPPER, M_LOWER, M_QEXT,
+     .           IPRFTYPE
+      INTEGER, ALLOCATABLE :: IROW_ESC(:), ICOL_ESC(:)
+      INTEGER, ALLOCATABLE :: IROW_EXT(:), ITAL_EXT(:,:)
       INTEGER, EXTERNAL :: EIRENE_IDEZ
       LOGICAL :: LRPS3D, LRPSCN, LINCL45, LMULPL,
      .           LRDMLTI, LRDMLV, NLSPCSCL_DUM, NLSPCSCL_ON_DUM,
@@ -211,7 +279,7 @@ C  MULTIPLIER FOR BOTH CPU TIME NTCPU AND MAX NUMBER OF MC HISTORIES NPTS, ....
       CHARACTER(kind=json_CK,len=420) :: zeileCk
 !cym/cpg end
 #endif
-      CHARACTER(420) :: FILE, FILE45
+      CHARACTER(500) :: FILE, FILE45
       CHARACTER(8) :: FILNAM, VARNAME, SPCNAME
       CHARACTER(4) :: H123, CLAB
       CHARACTER(50) :: REAC
@@ -223,7 +291,7 @@ C  MULTIPLIER FOR BOTH CPU TIME NTCPU AND MAX NUMBER OF MC HISTORIES NPTS, ....
 cdr  intermediate data for those already set in find_param.f
       integer :: noptim_save
       EXTERNAL :: EIRENE_DEKEY, EIRENE_DEKEYB, EIRENE_FILEPATH_USR,
-     .            EIRENE_READ_REACLINES, EIRENE_READ_TOKEN,
+     .            EIRENE_READ_TOKEN,
      .            EIRENE_READ_TRIANG, EIRENE_READ_TETRA,
      .            EIRENE_ROTADD, EIRENE_SETREF, EIRENE_SETROT,
      .            EIRENE_SETUP_DEFAULT_EMISSIVITY,
@@ -263,6 +331,8 @@ C
 
 cdr LMULPL=TRUE: enforce multiple Ti and V..IN, due to BGK reactions (virt. backgrounds)
       LMULPL = .FALSE.
+C
+      CALL EIRENE_LEER(2)
 C
 C  READ TEXT DESCRIBING THE RUN, 100--199
 C
@@ -332,7 +402,6 @@ c   done with this optional "storage save mode card"
 C
 * For gfortran: it does not accept empty field for logicals
       call fix_logical_input(zeile,20)
-!pb do not overwrite here
       READ (ZEILE,6665) NLSCL,NLTEST,NLANA,NLDRFT,NLCRR,
      .                  NLERG,NLIDENT,NLONE,NLMOVIE,NLDFST,
      .                  NLRANMAR,NLCASCAD,NLOCTREE,NLWRMSH,NEXVS,
@@ -1105,7 +1174,7 @@ cdr increase counter on surflist
 C  READ LOCAL (FOR THIS SURFACE) SURFACE INTERACTION MODEL, NEXT 3 OR 4 INPUT CARDS
         ELSE
 CVK LCHSPNWL
-          READ (ZEILE,6666) ILREF(NLJ),ILSPT(NLJ),ISRS(1,NLJ),
+          READ (ZEILE,6666) ILREF(1,NLJ),ILSPT(NLJ),ISRS(1,NLJ),
      .                      ISRC(1,NLJ),LCHSPNWL(1,NLJ)
           IREAD=0
           READ (IUNIN,6664) ZNML(NLJ),EWALL(NLJ),EWBIN(NLJ),
@@ -1324,7 +1393,7 @@ C  ASSIGN LOCAL REFLECTION FROM A LIST READ BELOW
         ELSE
 C  READ LOCAL REFLECTION MODEL, ADDITIONAL SURFACE
 CVK LCHSPNWL
-          READ (ZEILE,6666) ILREF(I),ILSPT(I),ISRS(1,I),ISRC(1,I),
+          READ (ZEILE,6666) ILREF(1,I),ILSPT(I),ISRS(1,I),ISRC(1,I),
      .                      LCHSPNWL(1,I)
           IREAD=0
           READ (IUNIN,6664) ZNML(I),EWALL(I),EWBIN(I),
@@ -1530,8 +1599,12 @@ C
      .       RC1MIN, RC1MAX, JFEX1MN, JFEX1MX, FP1,
      .       RC2MIN, RC2MAX, JFEX2MN, JFEX2MX, FP2,
      .       IZ, ELNAME, BUNDLING,
+     .       M_popesc, M_upper, M_lower,  !  read from extra cards: filnam =CR_... format
      .       IROW_ESC, ICOL_ESC, POP_ESC,
-     .       IFTFL, NCOEF, COEF)
+     .       M_qext,                      !  read from extra cards: filnam =CR_... format
+     .       IROW_EXT, ITAL_EXT,
+     .       IFTFL, NCOEF, COEF,
+     .       IPRFTYPE)                    !  read from extra cards, filnam =PHOTONS
 
 C  SAVE SOME OF THE INPUT FLAGS FOR LATER
 C  PROCESSING (MASS SCALING, POTENTIAL ENERGY INCREMENT) IN XSTCX,XSTEI,...
@@ -1548,9 +1621,13 @@ C
 ! additional input card read for TAB2D/ADAS format
      .               ELNAME,IZ,BUNDLING,
 ! (optional) additional input card read CR internal models
+     .               M_POPESC,M_UPPER,M_LOWER,
      .               IROW_ESC,ICOL_ESC,POP_ESC,
+     .               M_QEXT,
+     .               IROW_EXT,ITAL_EXT,
 ! (optional) for "CONST models"
-     .               IFTFL, NCOEF, COEF)
+     .               IFTFL,NCOEF,COEF,
+     .               IPRFTYPE)
         GOTO 411
       ENDIF
       IF (TRCAMD) CALL EIRENE_LEER(1)
@@ -1926,9 +2003,11 @@ C  DEFAULTS FOR PHOTONIC SPECIES:
           END IF
           kk=IREACPH(JPHOT,K)
           elonly=iswr(kk)
-          IF (IBGKPH(JPHOT,K).NE.0 .AND. elonly .NE.5) then
+cdr  allow bgk flags also for photon reactions (type: PH)
+          IF (IBGKPH(JPHOT,K).NE.0 .AND. elonly .NE.5
+     .         .AND. elonly .NE.7) then
             WRITE (IUNOUT,*)
-     .       'REACT. KK: BGK ITERAT. FOR JPHOT IGNORED. NOT EL'
+     .       'REACT. KK: BGK ITERAT. FOR JPHOT IGNORED. NOT EL OR PH'
             WRITE (IUNOUT,*) 'IPHOT, KK', JPHOT,KK
             IBGKPH(JPHOT,K)=0
             IMSG=1
@@ -2658,6 +2737,7 @@ cdr look for next input block: no. 7
 
         ALLOCATE (REFCUR)
 cdr reflection/recycling parameters
+        ALLOCATE (REFCUR%JLREF(nspz))
         ALLOCATE (REFCUR%JSRS(nspz))
         ALLOCATE (REFCUR%JSRC(nspz))
         ALLOCATE (REFCUR%JLCHSPNWL(nspz))
@@ -2676,6 +2756,7 @@ cdr sputtering parameters
         ALLOCATE (REFCUR%ESPTCR(nspz))
         NULLIFY (REFCUR%SPEC_LINES)
 
+        REFCUR%JLREF = 0
         REFCUR%JSRS = 0
         REFCUR%JSRC = 0
         REFCUR%JLCHSPNWL = 0
@@ -2698,7 +2779,7 @@ cdr  default parameters for sputter models
 cdr read a full "surfmod_..." model
         READ (IUNIN,'(A72)') ZEILE
         call fix_integer_input(zeile,6)
-        READ (ZEILE,6666) REFCUR%JLREF,REFCUR%JLSPT,
+        READ (ZEILE,6666) REFCUR%JLREF(1),REFCUR%JLSPT,
      .                    REFCUR%JSRS(1),REFCUR%JSRC(1),
      .                    REFCUR%JLCHSPNWL(1),REFCUR%REFCELL
         READ (IUNIN,6664) REFCUR%ZNMLR,REFCUR%EWALLR,REFCUR%EWBINR,
@@ -2712,6 +2793,7 @@ cdr This particular "surface model" SURFMOD_... is now copied NSPZ times,
 cdr i.e., made identically the same for all possible incident species ISPZ
 cdr At this point we do not know if it includes a sputter card or not.
         DO I=2,NSPZ
+          REFCUR%JLREF(I) = REFCUR%JLREF(1)
           REFCUR%JSRS(I) = REFCUR%JSRS(1)
           REFCUR%JSRC(I) = REFCUR%JSRC(1)
           REFCUR%JLCHSPNWL(I) = REFCUR%JLCHSPNWL(1)    !VK
@@ -2776,6 +2858,9 @@ cdr Tentatively assume: species dep. surface model
             refcur%spec_lines => spr
           end if
           select case (varname)
+          case ('ILREF')
+            if (ispz > 0)
+     .          read (zeile(18:),'(I6)') REFCUR%JLREF(ispz)
           case ('ISRS')
             if (ispz > 0)
      .          read (zeile(18:),'(I6)') REFCUR%JSRS(ispz)
@@ -2849,7 +2934,7 @@ cxpb Assume old SOLPS4.3 format
               ideflt_sput=1
               ideflt_spez=-1
               !Pressure feedback loop model
-              IF (REFCUR%JLREF == 4)
+              IF (REFCUR%JLREF(1) == 4)
      .          WRITE (IUNOUT,*) "PFL with parameters: ",
      .            REFCUR%REFCELL, REFCUR%REFPRESS
             end if

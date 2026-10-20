@@ -395,7 +395,10 @@ cdr Had already been taken care of similarly in xstrc.f
                       EE = EIRENE_ENERGY_RATE_COEFF(KREAD,J,TEINL(J),
 cdr  .                                              PLS(J),.FALSE.,1) ! to be removed
      .                                              PLS(J),.TRUE.,1)
-                      EELEI1(IREI,J)=-EE*DEIN(J)*FACTKK/
+crc check if EE is a rate or a rate coefficient
+crc if it is a rate coefficient, it should be multiplied by DEIN(J)
+                      IF (IFTFLG(KREAD,2) < 100) EE = EE*DEIN(J)
+                      EELEI1(IREI,J)=-EE*FACTKK/
      .                               (TABEI1(IREI,J)+EPS60)
 cdr                   EE = MAX(-100._DP,EE+FCTKKL+DEINL(J))     ! to be removed
 cdr                   EELEI1(IREI,J)=-EXP(EE)/(TABEI1(IREI,J)+EPS60)   ! to be removed

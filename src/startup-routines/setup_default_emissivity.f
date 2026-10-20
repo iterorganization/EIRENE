@@ -58,24 +58,46 @@ cdr
       TYPE(TCONTRIB) :: CNT
 
       INTERFACE
-        SUBROUTINE EIRENE_SLREAC (IR,FILNAM,H123,REAC,CRC,
+        SUBROUTINE EIRENE_SLREAC (IR, FILNAM, H123, REAC, CRC,
      .             RC1MIN, RC1MAX, FP1, JFEX1MN, JFEX1MX,
      .             RC2MIN, RC2MAX, FP2, JFEX2MN, JFEX2MX,
      .             ELNAME, IZ1, BUNDLING,
+cdr  optional parameters
+     .             M_popesc, M_upper, M_lower,  ! for internal CR models, line emission etc..
      .             IROW_ESC, ICOL_ESC, POP_ESC,
-     .             IFTFL, NCOEF, COEF)
+cdr  optional parameters
+     .             M_qext,                      ! for internal CR models, line emission etc..
+     .             IROW_EXT, ITAL_EXT,
+cdr  optional arguments for FILNAM=CONST options
+     .             IFTFL, NCOEF, COEF,
+cdr  optional arguments for FILNAM=PHOTONS options
+     .             IPRFTYPE)
+
         USE EIRMOD_PRECISION
-        INTEGER,      INTENT(IN) :: IR, IZ1
-        INTEGER,      INTENT(IN), OPTIONAL :: IROW_ESC, ICOL_ESC,
-     .                                        IFTFL, NCOEF
-        REAL(DP),     INTENT(IN), OPTIONAL :: POP_ESC
-        REAL(DP),     INTENT(IN), OPTIONAL :: COEF(9)
-        CHARACTER(LEN=*), INTENT(IN), OPTIONAL :: BUNDLING
+        INTEGER,      INTENT(IN) :: IR
         CHARACTER(8), INTENT(IN) :: FILNAM
         CHARACTER(4), INTENT(IN) :: H123
         CHARACTER(LEN=*), INTENT(IN) :: REAC
-        CHARACTER(2), INTENT(IN) :: ELNAME
         CHARACTER(3), INTENT(IN) :: CRC
+c  optional input for slreac: TAB2D or ADAS model data
+        INTEGER,      INTENT(IN) :: IZ1
+        CHARACTER(2), INTENT(IN) :: ELNAME
+c  optional input for slreac: CR model data
+        INTEGER,      INTENT(IN), OPTIONAL :: M_popesc, M_upper,
+     .                                           M_lower
+        INTEGER,      INTENT(IN), OPTIONAL :: IROW_ESC(:),
+     .                                           ICOL_ESC(:)
+        REAL(DP),     INTENT(IN), OPTIONAL :: POP_ESC(:)
+c  optional input for slreac: CR model data
+        INTEGER,      INTENT(IN), OPTIONAL :: M_qext
+        INTEGER,      INTENT(IN), OPTIONAL :: IROW_EXT(:),
+     .                                           ITAL_EXT(:,:)
+c  optional input for slreac: filnam=CONST option
+        INTEGER,      INTENT(IN), OPTIONAL :: IFTFL, NCOEF
+        REAL(DP),     INTENT(IN), OPTIONAL :: COEF(9)
+c  optional input for slreac: filnam=PHOTONS option
+        INTEGER,      INTENT(IN), OPTIONAL :: IPRFTYPE
+        CHARACTER(LEN=*), INTENT(IN), OPTIONAL :: BUNDLING
         INTEGER,  INTENT(IN OUT) :: JFEX1MN, JFEX1MX,JFEX2MN, JFEX2MX
         REAL(DP), INTENT(IN OUT) :: RC1MIN, RC1MAX, FP1(6),
      .                              RC2MIN, RC2MAX, FP2(6)
@@ -139,9 +161,7 @@ c ratio H2+/H2, and assuming also an IC contribution to H2+ formation
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
 
 c ratio H-/H2
       FILNAM = 'AMJUEL  '
@@ -153,9 +173,7 @@ c ratio H-/H2
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
 
 c ratio H3+/H2:  prod rate: [H2+] [H2].  loss rate: [ne] [H3+]
       FILNAM = 'AMJUEL  '
@@ -167,9 +185,7 @@ c ratio H3+/H2:  prod rate: [H2+] [H2].  loss rate: [ne] [H3+]
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
 
       ALLOCATE (EMIS_LINES(NUM_LINES))
       EMIS_LINES%LINE_NAME = REPEAT(' ',80)
@@ -206,9 +222,7 @@ C  H(n=3)/H(n=1)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(1)%COMPO(1)%IRC = NRC
 
 cdr  hard-coded type: atoms. Species: default: =0
@@ -252,9 +266,7 @@ C  H(n=3)/H+
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(1)%COMPO(2)%IRC = NRC
 
 cdr  hard-coded type: bulk ions. Species: default: =0
@@ -295,9 +307,7 @@ C  H(n=3)/H2(g)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(1)%COMPO(3)%IRC = NRC
 
 cdr hard-coded type: molecules. Species: default: =0
@@ -339,9 +349,7 @@ C  H(n=3)/H2+(g)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(1)%COMPO(4)%IRC = NRC
 
 cdr  hard-coded type: molecules. Species: default: =0
@@ -386,9 +394,7 @@ C  H(n=3)/H-
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(1)%COMPO(5)%IRC = NRC
 
 c  hard-coded: type: molecules. Species: default: =0
@@ -434,9 +440,7 @@ C  H(n=3)/H3+
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(1)%COMPO(6)%IRC = NRC
 
 c  hard-coded: type: molecules. Species: default: =0
@@ -504,9 +508,7 @@ C  H(n=4)/H(n=1)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(2)%COMPO(1)%IRC = NRC
 
       CNT%ISP     = 0
@@ -544,9 +546,7 @@ C  H(n=4)/H+
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(2)%COMPO(2)%IRC = NRC
 
       CNT%ISP     = 0
@@ -584,9 +584,7 @@ C  H(n=4)/H2(g)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(2)%COMPO(3)%IRC = NRC
 
       CNT%ISP     = 0
@@ -625,9 +623,7 @@ C  H(n=4)/H2+(g)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(2)%COMPO(4)%IRC = NRC
 
       CNT%ISP     = 0
@@ -667,9 +663,7 @@ C  H(n=4)/H-
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(2)%COMPO(5)%IRC = NRC
 
       CNT%ISP     = 0
@@ -709,9 +703,7 @@ C  H(n=4)/H3+
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(2)%COMPO(6)%IRC = NRC
 
       CNT%ISP     = 0
@@ -768,9 +760,7 @@ C  H(n=5)/H(n=1)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(3)%COMPO(1)%IRC = NRC
 
       CNT%ISP     = 0
@@ -807,9 +797,7 @@ C  H(n=5)/H+
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(3)%COMPO(2)%IRC = NRC
 
       CNT%ISP     = 0
@@ -847,9 +835,7 @@ C  H(n=5)/H2(g)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(3)%COMPO(3)%IRC = NRC
 
       CNT%ISP     = 0
@@ -888,9 +874,7 @@ C  H(n=5)/H2+(g)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(3)%COMPO(4)%IRC = NRC
 
       CNT%ISP     = 0
@@ -929,9 +913,7 @@ C  H(n=5)/H-
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(3)%COMPO(5)%IRC = NRC
 
       CNT%ISP     = 0
@@ -970,9 +952,7 @@ C  H(n=5)/H3+
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(3)%COMPO(6)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1031,9 +1011,7 @@ C  H(n=6)/H(n=1)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(4)%COMPO(1)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1071,9 +1049,7 @@ C  H(n=6)/H+
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(4)%COMPO(2)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1111,9 +1087,7 @@ C  H(n=6)/H2(g)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(4)%COMPO(3)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1152,9 +1126,7 @@ C  H(n=6)/H2+(g)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(4)%COMPO(4)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1194,9 +1166,7 @@ C  H(n=6)/H-
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(4)%COMPO(5)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1236,9 +1206,7 @@ C  H(n=6)/H3+
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(4)%COMPO(6)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1294,9 +1262,7 @@ C  H(n=2)/H(n=1)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(5)%COMPO(1)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1334,9 +1300,7 @@ C  H(n=2)/H+
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(5)%COMPO(2)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1374,9 +1338,7 @@ C  H(n=2)/H2(g)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(5)%COMPO(3)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1415,9 +1377,7 @@ C  H(n=2)/H2+(g)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(5)%COMPO(4)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1457,9 +1417,7 @@ C  H(n=2)/H-
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(5)%COMPO(5)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1499,9 +1457,7 @@ C  H(n=2)/H3+
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(5)%COMPO(6)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1557,9 +1513,7 @@ C  H(n=3)/H(n=1)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(6)%COMPO(1)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1597,9 +1551,7 @@ C  H(n=3)/H+
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(6)%COMPO(2)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1637,9 +1589,7 @@ C  H(n=3)/H2(g)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(6)%COMPO(3)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1680,9 +1630,7 @@ C  H(n=3)/H2+(g)
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(6)%COMPO(4)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1724,9 +1672,7 @@ C  H(n=3)/H-
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(6)%COMPO(5)%IRC = NRC
 
       CNT%ISP     = 0
@@ -1768,9 +1714,7 @@ C  H(n=2)/H3+
       CALL EIRENE_SLREAC (NRC,FILNAM,H123,REAC,CRC,
      .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
      .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-     .               ELNAME,IZ,BUNDLING,
-     .               IROW_ESC,ICOL_ESC,POP_ESC,
-     .               IFTFL, NCOEF, COEF)
+     .               ELNAME,IZ,BUNDLING)
       EMIS_LINES(6)%COMPO(6)%IRC = NRC
 
       CNT%ISP     = 0

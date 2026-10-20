@@ -2,10 +2,9 @@ cdr  re-activated: Jan 2018
 cdr  fix ph4:  cleanup: remove pressure broadening, polari,...
 cdr            rename pointer to type(line_data): phline%...  to line_ir%...
 cdr  Apr.22: The iprftype card is now already read in read_reaclines,
-cdr          as were all other cards. So this exception is removed now.
-cdr  (not ready here)
+cdr          as were all other cards. So this exception is removed now. 
 
-      subroutine EIRENE_read_photdbk (ir, reac, isw)
+      subroutine EIRENE_read_photdbk (ir, reac, isw, iprftype)
 c   read parameters relevant "reaction no IR" for line transport (photon gas transport)
 c   from photonic database, into EIRENE data structure REACDAT(IR).
 c   A photon (IPHOT) "line" is a sharp or broadened "line" photon
@@ -24,14 +23,14 @@ c
 
       implicit none
 
-      integer, intent(in) :: ir, isw
+      integer, intent(in) :: ir, isw, iprftype
       CHARACTER(50), INTENT(IN) :: REAC
 
       real(dp) :: wl, aik, ei, ej, b12, b21
       real(dp) :: rdata(9,1)
 
       integer :: gi, gj, inep, knep
-      integer :: ianf, iend, iblnk, lr, ic, iprftype,
+      integer :: ianf, iend, iblnk, lr, ic,
      .           i1, lel
       character(1000) :: zeile
       character(20) :: elementname
@@ -154,9 +153,19 @@ c
 
       close (unit=29+ifoff)
 
-      read (iunin,'(12i6)') iprftype
+c  reaction no IR is a "photonic" reaction
+      reacdat(ir)%lphr = .true.
+
+      allocate (reacdat(ir)%phr)
+      allocate (reacdat(ir)%phr%line)
+      nullify (reacdat(ir)%phr%adas)
+      nullify (reacdat(ir)%phr%poly)
+      nullify (reacdat(ir)%phr%tab1d)
+      nullify (reacdat(ir)%phr%crm)
 
       allocate (phline)
+
+      phline => reacdat(ir)%phr%line
 
       phline%aik = aik
 !  line center wavelength
@@ -189,22 +198,11 @@ cdr  ??
 cdr  jan 18: try to reconnect photonic data to reacdat structure.
 cdr          not finished
 
-c  reaction no IR is a "photonic" reaction
-      reacdat(ir)%lphr = .true.
-
-      allocate (reacdat(ir)%phr)
-
-      nullify (reacdat(ir)%phr%adas)
-      nullify (reacdat(ir)%phr%poly)
-      nullify (reacdat(ir)%phr%tab1d)
-      nullify (reacdat(ir)%phr%crm)
-
-      reacdat(ir)%phr%line => phline
       reacdat(ir)%phr%ifit = -1
 
 cdr  fetch data for bound-bound transition line
-      call EIRENE_get_reaction(ir)
-      b21=EIRENE_ph_b21()
+c      call EIRENE_get_reaction(ir)
+      b21=EIRENE_ph_b21(ir)
       b12=b21*gi/gj
       phline%b21 = b21
       phline%b12 = b12

@@ -69,7 +69,7 @@ c  transformation of parameters p1 and p2:
                                 ! But should come from database
 
       integer :: jfex1mn, jfex1mx,jfex2mn, jfex2mx
-      integer :: ip1, ip2, iflavor, ivar
+      integer :: ip1, ip2, icrm, ivar, iform
       integer :: modc
       INTEGER, EXTERNAL :: EIRENE_IDEZ
       EXTERNAL :: EIRENE_SNGL_POLY, EIRENE_DBL_POLY, EIRENE_EXIT_OWN
@@ -253,15 +253,18 @@ c..............................................................
       else if (reacdat(ir)%rtc%ifit == 5) then
 
 ! INTERNAL COLLISION RADIATIVE CODE
+c  returns rates, rate coefs, etc, not LN or LOG of rates
 
-c  convert parameters p1, p2 to exp(p1), exp(p2): PP1,PP2
+c  convert (log) parameters p1, p2 to exp(p1), exp(p2): PP1,PP2
         PP1 = EXP(P1)
         PP2 = EXP(P2)
 
-        iflavor = reacdat(ir)%rtc%crm%iflav
+        icrm = reacdat(ir)%rtc%crm%iflav
         ivar = reacdat(ir)%rtc%crm%ivarst
+        iform = reacdat(ir)%rtc%crm%iformul
 
-        CALL EIRENE_COLRAD(IR, IFLAVOR, IVAR, IC, PP1, PP2, RES)
+        CALL EIRENE_COLRAD(IR, ICRM, RES,
+     .                     IFORM, IVAR, IC, PP1, PP2)
 
 ! lexp option was not connected here, but used in xstei.f
 ! corrected, Oct. 28th 2015
@@ -270,7 +273,10 @@ c  convert parameters p1, p2 to exp(p1), exp(p2): PP1,PP2
           rate = res
         elseif (res.gt.0.0) then
           rate = log(res)
+        elseif (res.eq.0.0) then
+          rate =-50.
         else
+          write (iunout,*) 'prate_coef, KK ',IR
           write (iunout,*) 'wrong sign from cr model'
           write (iunout,*) 'p1,p2,rate ',pp1,pp2,res
           write (iunout,*) 'return exp(-50)'

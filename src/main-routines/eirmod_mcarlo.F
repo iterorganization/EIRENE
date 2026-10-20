@@ -124,6 +124,7 @@ cdr april 16: use: nstrai rather than nstra in do-loops. Bug fix from ITER-IO
 cdr Nov. 20 : Do RANMAR random generator test only once, not per stratum.
 cdr           It uses its own (Marsagia-) seed for initialization, independent
 cdr           of eirene seed per stratum.
+cdr fix ph6:  remove obsolete option LINE_CUTOFF here and from SAMVOL
 c
       SUBROUTINE EIRENE_MCARLO
 C
@@ -295,7 +296,6 @@ C  INITIALIZE SUBR. REFLEC AND SPUTER
       tim1 = tim2
       IF (NPHOT > 0) THEN
         CALL EIRENE_REFLC0_PHOTON
-        CALL EIRENE_LINE_CUTOFF
         TIM2=EIRENE_SECOND_OWN()
         IF (TRCTIM)
      >   write (iunout,*) 'CPU time for reflc0_photon ', tim2-tim1

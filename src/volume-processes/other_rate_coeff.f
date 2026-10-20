@@ -43,7 +43,7 @@ cdr           ifit=4 option was missing (1D tables). added, but not checked.
 !             Currently : only for ifit=2, polynomial fits vs. ne, T, ne in units 1e8 *cm**-3.
 !             emissivity.f relies on the current use of ip2shft in the tested cases!
 
-! to be done: lexp option for ifit=4, ifit=5 not written.
+! to be done: lexp option for ifit=4
 !             ip2shft option: currently hard-wired only for ifit=2 and shift = 1e-8
 !             what happens if later call with other shift ?  coding to be reconsidered !
 
@@ -63,7 +63,7 @@ cdr           ifit=4 option was missing (1D tables). added, but not checked.
       real(dp), intent(in) :: p1, p2
       logical, intent(in) :: lexp
 
-      real(dp) :: orate, EIRENE_sngl_poly, dum(9),
+      real(dp) :: res, orate, EIRENE_sngl_poly, dum(9),
      .            pp1, rc1min,  rc1max, fp1(6),
      .            pp2, rc2min,  rc2max, fp2(6),
      .                 earrh0,
@@ -76,7 +76,7 @@ c  transformation of parameters p1 and p2:
                                         !But should come from database
 
       integer :: jfex1mn, jfex1mx,jfex2mn, jfex2mx
-      integer :: ip1, ip2, iflavor, ivar
+      integer :: ip1, ip2, icrm, ivar, iform
       external :: eirene_sngl_poly, eirene_dbl_poly, eirene_exit_own
 
       interface
@@ -232,20 +232,35 @@ c..............................................................
       else if (reacdat(ir)%oth%ifit == 5) then
 
 ! INTERNAL COLLISION RADIATIVE CODE
+c  returns rates, rate coefs, etc, not LN or LOG of rates
 
-c  convert parameters p1, p2 to exp(p1), exp(p2): PP1,PP2
+c  convert (log) parameters p1, p2 to exp(p1), exp(p2): PP1,PP2
         PP1 = EXP(P1)
         PP2 = EXP(P2)
 
-        iflavor = reacdat(ir)%oth%crm%iflav
+        icrm = reacdat(ir)%oth%crm%iflav
         ivar = reacdat(ir)%oth%crm%ivarst
+        iform = reacdat(ir)%oth%crm%iformul
 
-        CALL EIRENE_COLRAD(IR, IFLAVOR, IVAR, IC, PP1, PP2, O_SCR)
+        CALL EIRENE_COLRAD(IR, ICRM, RES,
+     .                     IFORM, IVAR, IC, PP1, PP2)
 
 !  lexp option was not connected here, but used in xstei.f ! corrected, Oct. 28th 2015
 
-        orate=o_scr
-        if (.not.lexp) orate = log(o_scr)  ! check o_scr > 0
+        if (lexp) then
+          orate = res
+c  not exp: return log of rate
+        elseif (res.gt.0.0) then 
+          orate = log(res)
+        elseif (res.eq.0.0) then
+          orate =-50.
+        else
+          write (iunout,*) 'orate_coef, KK ',IR
+          write (iunout,*) 'wrong sign from cr model'
+          write (iunout,*) 'p1,p2,orate ',pp1,pp2,res
+          write (iunout,*) 'return orate=exp(-50)'
+          orate =-50.
+        endif
 
       end if
 

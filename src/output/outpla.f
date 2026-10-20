@@ -46,6 +46,7 @@ C
       USE EIRMOD_CGEOM
       USE EIRMOD_CTEXT
       USE EIRMOD_COUTAU
+      USE EIRMOD_COMXS, ONLY: npbgkp
       USE EIRMOD_CSPEI
       USE EIRMOD_CINIT
 
@@ -60,6 +61,7 @@ C
      .           NXM, NYM, NZM, NR1PR, NP2PR, NT3PR, NSBPR, NFLGPR,
      .           ITALI, K, NFTI, NFTE, KG,
      .           KS, KK, ICO   ! indexing in vectorial tallies
+      LOGICAL :: LPPOST  ! POST PROCESSED INPUT TALLY ?
       EXTERNAL :: EIRENE_INTTAL, EIRENE_INTVOL, EIRENE_PRTTAL,
      .            EIRENE_PRTVOL, EIRENE_HEADNG, EIRENE_LEER,
      .            EIRENE_MASAGE, EIRENE_MASR1, EIRENE_MASR2
@@ -206,25 +208,31 @@ c  check for valid range of tally ITALI
             ENDIF
 
 c  HELPP, HELPW: for weighting when averaging tallies across several cells
+cdr  if ical=1: print only post processed field particles
+cdr  print only species ipls=k with either "cdenmodel", or npbgkp(k,1) .ne.0
+            lppost=ical .eq.1 .and. (VERIFY(CDENMODEL(K),' ') == 0) 
+     .             .and. (npbgkp(k,1) == 0)
+
             SELECT CASE (ITALI)
             CASE (1)
               HELPP(1:NSBOX) = TEIN(1:NSBOX)
             CASE (2)
-cdr  missing here: verify cdenmodel(k) ?
+cdr was missing here: verify cdenmodel(k) ?
+              IF (lppost) CYCLE
               HELPP(1:NSBOX) = TIIN(MPLSTI(K),1:NSBOX)
             CASE (3)
               HELPP(1:NSBOX) = DEIN(1:NSBOX)
             CASE (4)
-              IF ((ICAL == 1).AND.(VERIFY(CDENMODEL(K),' ') == 0)) CYCLE
+              IF (lppost) CYCLE
               HELPP(1:NSBOX) = DIIN(K,1:NSBOX)
             CASE (5)
-              IF ((ICAL == 1).AND.(VERIFY(CDENMODEL(K),' ') == 0)) CYCLE
+              IF (lppost) CYCLE
               HELPP(1:NSBOX) = VXIN(MPLSV(K),1:NSBOX)
             CASE (6)
-              IF ((ICAL == 1).AND.(VERIFY(CDENMODEL(K),' ') == 0)) CYCLE
+              IF (lppost) CYCLE
               HELPP(1:NSBOX) = VYIN(MPLSV(K),1:NSBOX)
             CASE (7)
-              IF ((ICAL == 1).AND.(VERIFY(CDENMODEL(K),' ') == 0)) CYCLE
+              IF (lppost) CYCLE
               HELPP(1:NSBOX) = VZIN(MPLSV(K),1:NSBOX)
             CASE (8)
               HELPP(1:NSBOX) = BXIN(1:NSBOX)
@@ -237,7 +245,7 @@ cdr  missing here: verify cdenmodel(k) ?
             CASE (12)
               HELPP(1:NSBOX) = ADIN(K,1:NSBOX)
             CASE (13)
-              IF ((ICAL == 1).AND.(VERIFY(CDENMODEL(K),' ') == 0)) CYCLE
+              IF (lppost) CYCLE
               HELPP(1:NSBOX) = EDRIFT(K,1:NSBOX)
             CASE (14)
               HELPP(1:NSBOX) = VOL(1:NSBOX)
@@ -265,16 +273,14 @@ cdr BV_VEC(1:3*NPLSV)
               IF (KS == 0 ) KS=NPLS
               ICO=(K-1)/NPLS  ! = 0,1,2
               KK=ICO*NPLSV
-              IF ((ICAL == 1) .AND.
-     .            (VERIFY(CDENMODEL(KS),' ') == 0)) CYCLE
+              IF (lppost) CYCLE
               HELPP(1:NSBOX) = BV_VEC(KK+MPLSV(KS),1:NSBOX)
             CASE (24)
 cdr  K ranges from 1 to 3*NPLS, KS: 1:NPLS
 cdr  PMOM_VEC(1:3*NPLS)
               KS=MOD(K,NPLS)
               IF (KS == 0 ) KS=NPLS
-              IF ((ICAL == 1) .AND.
-     .            (VERIFY(CDENMODEL(KS),' ') == 0)) CYCLE
+              IF (lppost) CYCLE
               HELPP(1:NSBOX) = PMOM_VEC(K,1:NSBOX)
             CASE (25)
               HELPP(1:NSBOX) = PSI(1:NSBOX)

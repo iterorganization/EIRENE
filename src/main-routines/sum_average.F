@@ -86,7 +86,7 @@ C
             IF (NLSPCSCL_PHOT) THEN
 #if ( !defined(G95) && !defined(LEGACYCOMP) )
               PRFPHML2(1:NMOL,0:NPHOT) => PRFPHML(:,J)
-              PRFPHMI2(0:NMOL,0:NPHOT) => PRFPMI(:,ISTRA)
+              PRFPHMI2(0:NMOL,0:NPHOT) => PRFPHMI(:,ISTRA)
               PRFPHMI2(IMOL,:) = PRFPHMI2(IMOL,:)+PRFPHML2(IMOL,:)
 #else
               DO JPHOT = 0, NPHOT

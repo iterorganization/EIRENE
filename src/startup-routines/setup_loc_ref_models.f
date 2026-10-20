@@ -24,6 +24,8 @@ C
         EINTEG(J)=EINTEG(1)
         AINTEG(J)=AINTEG(1)
         DO JSPZ=1,NSPZ
+Crc changes to ilref, not sure if correct here
+          ILREF(JSPZ,J)=ILREF(1,J)
           ISRS(JSPZ,J)=ISRS(1,J)
           ISRC(JSPZ,J)=ISRC(1,J)
           LCHSPNWL(JSPZ,J)=LCHSPNWL(1,J)
@@ -51,7 +53,7 @@ C
         DO WHILE (ASSOCIATED(SURFCUR))
           IF (SURFCUR%MODNAME == REFCUR%REFNAME) THEN
             NLJ = SURFCUR%NOSURF
-            ILREF(NLJ) = REFCUR%JLREF
+            ILREF(:,NLJ) = REFCUR%JLREF
             ILSPT(NLJ) = REFCUR%JLSPT
             ISRS(:,NLJ) = REFCUR%JSRS
             ISRC(:,NLJ) = REFCUR%JSRC
@@ -73,9 +75,9 @@ C
             SPTPRM(:,NLJ) = REFCUR%STPRMR
             ESPUTS(:,NLJ) = REFCUR%ESPTSR
             ESPUTC(:,NLJ) = REFCUR%ESPTCR
-
+crc changes to ilref, not sure if correct here, temporary solution
             !Initialize pressure feedback loop
-            IF (ILREF(NLJ) == 4)THEN
+            IF (ILREF(1,NLJ) == 4)THEN
               CALL initPressureFeedback(RPRESSFED(NLJ), NLJ,
      .                                  REFCUR%REFCELL,
      .                                  REFCUR%REFPRESS)

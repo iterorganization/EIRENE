@@ -144,7 +144,7 @@ cdr   REAL(DP) :: timea
      .           I, J, I1, I2, I3, JL, IO, IUSR, IFLG,
      .           ITALI, IRAD, IS, ISS, INC,
      .           JPLS, IRE, JSPZ, JTRJ, ISTRAI, NLJ, IENTRY,
-     .           IO13
+     .           IO13, INALL
 
 #ifdef USE_MPI
       INTEGER :: IER
@@ -479,7 +479,7 @@ C  COPY USER SPECIFIC DATA TO FILE user_data.input
           ELSE
             IF (IO == 0) THEN
               JL = JL + 1
-              IF (JL == 1) THEN
+              IF (JL == 1 .AND. IUSROUT == 0) THEN
                 IUSR = -9999
                 IF (IUSROUT == 0) THEN
                   CALL EIRENE_OPENFILE(IUSR,FILE='user_data.input',
@@ -938,7 +938,8 @@ cdr Then just do nothing for virt. background.
 C
 C  COMPUTE SOME 'DERIVED' PLASMA DATA PROFILES FROM THE INPUT PROFILES
 C
-        CALL EIRENE_PLASMA_DERIV(0)
+        INALL=0
+        CALL EIRENE_PLASMA_DERIV(0,INALL)
 
         TPB2=EIRENE_SECOND_OWN()
         IF (TRCTIM)

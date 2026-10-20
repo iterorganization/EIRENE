@@ -24,15 +24,13 @@ cdr             call "exit_own" rather than "stop", further cleanup...
 cdr             remaining differences:
 cdr                 use eirmod_ccrm (Vlad Kotov) in solps-iter (commented out)
 cdr                 lima=34 or lima=40, lima undefined in solps-iter?
-
-cdr: nov. 2015  added first argument in parameter list: ICELL
-CDR  to be done: introduce an array 'visited(icell)' and store e-rate, etc..., further possible data
-cdr              for next call to H_colrad, see e.g. fem routine df_xyz.f in geometry block
-cdr              currently this new argument is not yet used.
-cdr  H_COLRAD is called from rate_coef.f, from energy_rate_coef.f,
+CDR  INSIDE EIRENE: THIS H_COLRAD IS CALLED FROM EIRENE_COLRAD.
+CDR  done:       there: introducedan array 'visited(icell)' and store e-rate, etc..., further possible data
+cdr              for next call to H_colrad.
+cdr  EIRENE_COLRAD is called from rate_coef.f, from energy_rate_coef.f,
 cdr                 and from other_rate_coef.f
-cdr           to provide ionization, radiation and electron cooling rates, either in a given cell (tbd) or
-cdr           for given Te, ne., as well as reduced CR population coefficients
+cdr           to provide ionization, radiation and electron cooling rates, 
+cdr           for given Te, ne., as well as to provide reduced CR population coefficients
 c****************************************************************************************************
 C*
 C*     COLLISIONAL-RADIATIVE MODEL OF
@@ -76,31 +74,42 @@ c   C(1,N)  : H(1)  ->  H*(N)  excitation from ground state
 C   Q_EXT(N): ???   ->  H*(N)  external source
 
 
-c   reduced pop coeff r0,r1,r_ext are per electron.
-c   hence: taken times "densel"
-c   for pop0,pop1,pop_ext (=pop2) - arrays of reduced population coefficients
+c   reduced pop coeff r0,r1,r_ext are in [units-S]/[units-M].
+c   eff rates scr, alp,  are in [units-S]
+c  Here new: 
+c   units matrix M:  rate  (Aik) 1/s) or ne * rate-coeff (also: 1/s)
+c   units source S:  S, beta, ne*alpha: rate coef (cm**3/s)
+c   hence: for pop0,pop1 taken times "densel", to make them dimensionless
+c   
+c   pop_ext (=pop2) - arrays of reduced population coefficients....depends (linearly) on units of Q_ext
+c   scr_ext, alp_ext. same units as Q_ext.
 C*
 C***********************************************************************
-      SUBROUTINE EIRENE_H_COLRAD (TEMP, DENSEL,
-     .                            Q_EXT, L_EXT,! in
-     .                            POP0, POP1, POP_EXT,! out
-     .                            ALPCR, SCR, SCR_EXT, ! out
-     .                            E_ALPCR, E_SCR, E_SCR_EXT,
-ctt  .                           ,E_ALPCR_T, E_SCR_T, E_SCR_EXT_T
-! input: selected pop esc factors for some lines
-     .                            POP_ESC)
+      SUBROUTINE EIRENE_H_COLRAD (TEMP, DENSEL, IFORM,                        ! in
+     .                            POP_ESC,                                    ! in,  selected pop esc factors for some lines
+     .                            Q_EXT, L_EXT,                               ! in,  rate coef. cm**3/s
+     .                            AIKEINST, ENERGLEV,                         ! out, in first call
+     .                            STATWGHT,                                   ! out, in first call
+     .                            POP0, POP1, POP_EXT,                        ! out
+     .                            ALPCR, SCR, SCR_EXT, ALP_EXT,               ! out
+     .                            E_ALPCR, E_SCR, E_SCR_EXT, E_ALP_EXT)       ! out
+ctt  .                           ,E_ALPCR_T, E_SCR_T, E_SCR_EXT_T  ! for testing
+
       USE EIRMOD_PRECISION
 C     USE EIRMOD_CCRM
       USE EIRMOD_COMPRT, ONLY: IUNOUT
       IMPLICIT NONE
 
 C--------- ATOMIC PARAMETER ------------------------------------------
+      INTEGER, INTENT(IN) :: IFORM
       REAL(DP), INTENT(IN) :: TEMP, DENSEL
+      REAL(DP), INTENT(OUT) :: AIKEINST(40,40), ENERGLEV(40),
+     .                         STATWGHT(40)
       REAL(DP), INTENT(IN) :: Q_EXT(40), POP_ESC(40,40)
       logical lopaque,l_ext
 
-      REAL(DP), INTENT(OUT) ::   ALPCR,    SCR,     SCR_EXT
-      REAL(DP), INTENT(OUT) :: E_ALPCR,  E_SCR,   E_SCR_EXT
+      REAL(DP), INTENT(OUT) ::   ALPCR,    SCR,     SCR_EXT, ALP_EXT
+      REAL(DP), INTENT(OUT) :: E_ALPCR,  E_SCR,   E_SCR_EXT, E_ALP_EXT
 ctt   REAL(DP), INTENT(OUT) :: E_ALPCR_T,E_SCR_T, E_SCR_EXT_T
       REAL(DP), INTENT(OUT) :: POP0(40), POP1(40), POP_EXT(40)
 
@@ -115,11 +124,19 @@ cdr   integer, parameter :: lupa=34, lima=40
       integer, parameter :: lupa=34, lima=34
       INTEGER, SAVE :: IFRST=0
       INTEGER :: IP
+      REAL(DP) :: P
       EXTERNAL :: EIRENE_CLSAHA, EIRENE_EINSTN,
      .            EIRENE_E_IONREC, EIRENE_IONREC,
      .            EIRENE_POPCOF_M, EIRENE_RATCOF,
      .            EIRENE_EXIT_OWN
 c
+cdr atomic structure: to be done only once,not for each cell
+      if (ifrst == 0) then
+        aikeinst=0.0_dp
+        energlev=0.0_dp
+        statwght=0.0_dp
+      endif
+
       IF (LIMA.GT.40.OR.LUPA.GT.LIMA) THEN
         WRITE (iunout,*) 'LIMA, LUPA ??? ',LIMA,LUPA
         CALL EIRENE_EXIT_OWN(1)
@@ -130,21 +147,27 @@ c  pop_esc   : population escape factor
 c  pop_esc= 1: opt. thin
 c  pop_esc= 0: opt. thick
 c
-c  only once and for all !!
+c  only once and for all for a given CR model dataset on REACDAT
 c
-      lopaque=.false.  ! .true.: fully Lyman opaque,
-                       ! all transitions to ground state blocked
+      lopaque=.false.  ! .true.: fully Lyman opaque, all transitions to ground state blocked
 
-      IF (IFRST == 0) THEN  ! must be redone,
-                            ! if lopaque or pop_esc change
+
+      IF (IFRST == 0) THEN  ! must be redone, if lopaque or pop_esc change
 cdr  better: move lopaque, pop_esc outside this routine. And check always
         CALL EIRENE_EINSTN(OSC,A,E_AT,40,lopaque,POP_ESC)
+        aikeinst=A
+        energlev=E_AT
         IFRST = 1
       END IF
 c
 c
 C ATOM
       CALL EIRENE_CLSAHA(TEMP,SAHA)
+      do ip=1,40
+        P=ip
+        statwght(ip)=P*P      
+      enddo
+
       CALL EIRENE_RATCOF(TEMP,OSC,SAHA,C,F,S,ALPHA,BETA,EBETA,lopaque)
 
 C
@@ -165,7 +188,9 @@ CDR COUPLING TO H+ IONS
         POP0(IP)=R0(IP)*DENSEL
 CDR COUPLING TO H ATOMS
         POP1(IP)=R1(IP)*DENSEL
-CDR COUPLING TO EXTERNAL SOURCE Q  FOR H*(N)
+CDR COUPLING TO EXTERNAL SOURCE Q_ext  FOR H*(N)
+cdr  q_ext:  source per second:  1/s:  no density factor densel, since CR matrix: 1/s. also R_ext [1]
+cdr  aber Vorsicht: dann ist auch src_ext und alp_ext in 1/s, nicht in cm**3/s
         POP_EXT(IP)=R_EXT(IP)
 
       END DO
@@ -173,14 +198,15 @@ C  EFFECTIVE COLLISION RATE COEFFICIENTS, ATOMS
       CALL EIRENE_IONREC(C,S,SAHA,A,ALPHA,BETA,
      &            R0,R1,DENSEL,LUPA,LIMA,
      &            F,R_EXT,Q_EXT,L_EXT,
-     &            ALPCR,SCR,SCR_EXT)
+     &            ALPCR,SCR,
+     &            ALP_EXT,SCR_EXT)
 C***********************************************************************
 C  EFFECTIVE ELECTRON COOLING RATE COEFFICIENTS, ATOMS
       CALL EIRENE_E_IONREC(C,S,SAHA,A,ALPHA,BETA,EBETA,
      &              R0,R1,DENSEL,LUPA,LIMA,
      &              F,R_EXT,Q_EXT,L_EXT,E_AT,
      &              ALPCR,      SCR,    SCR_EXT,
-     &              E_ALPCR,  E_SCR,  E_SCR_EXT
+     &              E_ALPCR,  E_SCR,  E_SCR_EXT, E_ALP_EXT
 ctt  &             ,E_ALPCR_T,E_SCR_T,E_SCR_EXT_T
      &              )
 C***********************************************************************
@@ -493,7 +519,7 @@ c  excitation   :            C
 c  de-excitation:            F  (by detailed balance)
 c  ionization:               S
 c  three body recombination: ALPHA (inverse to ionization S)
-      IF(TE.GT.5.0D3) THEN
+      IF(TE.GT.5.0E3) THEN
 ! Te gt than 5000 Kelvin: calculate S, and derive alpha
         CALL EIRENE_EXCOFF(U,OSC,TEMP,C,F,S,ALPHA)
 
@@ -1256,12 +1282,12 @@ c  two or three right linearly additive hand side terms?
 c
 
         DO J=1,LUP-1
-coupling to H+
+C coupling to H+
             R0(J+1)   =BLAX(1,J)
-coupling to H-groundstate
+C coupling to H-groundstate
             R1(J+1)   =BLAX(2,J)
         ENDDO
-coupling to Q_EXT
+C coupling to Q_EXT: external sources for H*(n) population
         IF (L_EXT) THEN
           DO J=1,LUP-1
             R_EXT(J+1)=BLAX(3,J)
@@ -1277,7 +1303,8 @@ C***********************************************************************
       SUBROUTINE EIRENE_IONREC
      &                 (C,S,SAHA,A,ALPHA,BETA,R0,R1,DENSEL,LUP,LIM,
      &                  F,R_EXT,Q_EXT,L_EXT,
-     &                  ALPCR,SCR,SCR_EXT)
+     &                  ALPCR,SCR,
+     &                  ALP_EXT,SCR_EXT)
 C
 C     EFFECTIVE IONIZATION AND RECOMBINATION RATE COEFFICIENTS
 C     FOR ATOMIC HYDROGEN
@@ -1290,6 +1317,7 @@ C
       IMPLICIT NONE
       INTEGER LUP, LIM
       REAL(DP) ALPCR, DENSEL, SCR, SCR_EXT
+      REAL(DP) ALP_EXT, ALP1_EXT, ALP2_EXT
       REAL(DP) C(40,40),S(40),SAHA(40),A(40,40),ALPHA(40),BETA(40),
      &         R0(40),R1(40),R_EXT(40),Q_EXT(40),F(40,40)
       INTEGER I
@@ -1330,7 +1358,16 @@ C  FROM EXTERNAL, TRANSITION TO CONTINUUM
         SCR_EXT=SCR_EXT+SUSRAD
  5002 CONTINUE
 
-C  ALP_EXT STILL MISSING: from external to ground state
+C  FROM EXTERNAL, TRANSITION TO (1)
+      ALP1_EXT=Q_EXT(1)
+
+      ALP2_EXT=0.0
+
+      DO 5004 I=2,LIM
+        ALP2_EXT=ALP2_EXT+R_EXT(I)*(DENSEL*F(I,1)+A(I,1))
+ 5004 CONTINUE
+
+      ALP_EXT=ALP1_EXT+ALP2_EXT
 
       RETURN
       END SUBROUTINE EIRENE_IONREC
@@ -1340,13 +1377,9 @@ C***********************************************************************
      &                   (C,S,SAHA,A,ALPHA,BETA,EBETA,
      &                    R0,R1,DENSEL,LUP,LIM,
      &                    F,R_EXT,Q_EXT,L_EXT,E_AT,
-                          !  ordinary rate coeffcients
-     &                    ALPCR,      SCR,    SCR_EXT,
-                          !  electron energy-weighted rate coefficients
-     &                    E_ALPCR,  E_SCR,  E_SCR_EXT
-                          !  radiation energy losses only,
-                          !  for consistency testing
-ctt  &                   ,E_ALPCR_T,E_SCR_T,E_SCR_EXT_T
+     &                    ALPCR,      SCR,    SCR_EXT,            !  ordinary rate coeffcients
+     &                    E_ALPCR,  E_SCR,  E_SCR_EXT, E_ALP_EXT  !  electron energy-weighted rate coefficients
+ctt  &                   ,E_ALPCR_T,E_SCR_T,E_SCR_EXT_T           !  radiation energy losses only, for consistency testing
      &                    )
 C
 C     EFFECTIVE ELECTRON ENERGY LOSS IONIZATION AND RECOMBINATION
@@ -1366,7 +1399,8 @@ C
       USE EIRMOD_PRECISION
       IMPLICIT NONE
       INTEGER LUP, LIM
-      REAL(DP) ALPCR, DENSEL, E_ALPCR, E_SCR, E_SCR_EXT, SCR, SCR_EXT
+      REAL(DP) ALPCR, DENSEL, E_ALPCR, E_SCR, E_SCR_EXT, SCR
+      REAL(DP) SCR_EXT, ALP_EXT, E_ALP_EXT
       REAL(DP) C(40,40),S(40),SAHA(40),A(40,40),F(40,40),
      &         ALPHA(40),BETA(40),EBETA(40),
      &         R0(40),R1(40),R_EXT(40),Q_EXT(40),E_AT(40)
@@ -1379,12 +1413,14 @@ C
       DO 5000 I=LUP+1,LIM
         R0(I)=1.0_DP*SAHA(I)
         R1(I)=0.0_DP
+cdr  no Saha-fringe for external contributions
         R_EXT(I)=0.0_DP
  5000 CONTINUE
 C
       E_SCR=0.0_DP
       E_SCR_EXT=0.0_DP
       E_ALPCR=0.0_DP
+      E_ALP_EXT=0.0_DP !rc exists but not used
 C  FOR TESTING: ONLY CUMULATE RADIATION LOSSES HERE.
 ctt   E_SCR_T=0.0_DP
 ctt   E_SCR_EXT_T=0.0_DP

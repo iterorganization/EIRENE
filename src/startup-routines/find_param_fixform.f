@@ -71,6 +71,7 @@ C
       USE EIRMOD_JSON, ONLY : NOPTIM_IN, NRTAL_IN, NSMSTRA_IN,
      .                        INDPRO_IN, NSTRAI_IN, NTIME_IN,
      .                        DBFNAME_IN
+      USE EIRMOD_COMXS, ONLY : MAXCRM, NCR_REAC, CR_KEY
       IMPLICIT NONE
 
       INTEGER :: INDGRD(3), INDPRO(12), IDUM(12)
@@ -523,12 +524,32 @@ cdr ....................................
 !PB   increase number of reactions by 1 as there are still
 !PB   calls to SLREAC which use reaction number NREACI+1 (SGNAL and HE_EMISS)
       NREAC = MAX(NREAC,NREACI+1)
+
+c  Count number of reaction data sets using internal coll. rad. models, currently H, He
+cdr   NRC_REAC(1): no. of H_colrad reaction rates or pop-coef data,
+cdr   NRC_REAC(4): no. of He_colrad reaction rates or pop-coef data
+      NCR_REAC = 0
 C
 cdr  count the number of reaction cards read here.
       NREAC_LINES=0
       READ (IUNIN,'(A72)') ZEILE
       DO WHILE (ZEILE(1:1) .NE. '*')
         NREAC_LINES=NREAC_LINES+1
+        IF (INDEX(ZEILE,'CR') > 0) THEN
+!  coll. rad. model found
+          IF (INDEX(ZEILE,'CR_') > 0) THEN
+!  coll. rad. model specified in more detail
+            DO I = MAXCRM, 1, -1
+              IF (LEN_TRIM(CR_KEY(I)) > 0) THEN
+                IF (INDEX(ZEILE,TRIM(CR_KEY(I))) > 0)
+     .            NCR_REAC(I) = NCR_REAC(I) + 1
+              END IF
+            END DO
+          ELSE
+!  use default coll. rad. model for hydrogen H, formulation II
+            NCR_REAC(1) = NCR_REAC(1) + 1
+          END IF
+        ENDIF
         READ (IUNIN,'(A72)') ZEILE
       END DO
 

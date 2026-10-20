@@ -154,9 +154,26 @@
         end if
 
         if (index(reaclines(i)%FILE,'CR') /= 0) then
-           call json%add(rea,'IROW_ESC',reaclines(i)%irow_esc)
-           call json%add(rea,'ICOL_ESC',reaclines(i)%icol_esc)
-           call json%add(rea,'POP_ESC',reaclines(i)%pop_esc)
+           call json%add(rea,'M_POPESC',reaclines(i)%m_popesc)
+           if (reaclines(i)%m_popesc > 0) then
+            call json%add(rea,'IROW_ESC',
+     .       reaclines(i)%irow_esc(1:reaclines(i)%m_popesc))
+            call json%add(rea,'ICOL_ESC',
+     .       reaclines(i)%icol_esc(1:reaclines(i)%m_popesc))
+            call json%add(rea,'POP_ESC',
+     .       reaclines(i)%pop_esc(1:reaclines(i)%m_popesc))
+           end if
+          call json%add(rea,'M_QEXT',reaclines(i)%m_qext)
+          if (reaclines(i)%m_qext > 0) then
+            call json%add(rea,'IROW_EXT',
+     .          reaclines(i)%irow_ext(1:reaclines(i)%m_qext))
+            call json%add(rea,'ITAL_EXT_1',
+     .          reaclines(i)%ital_ext(1,1:reaclines(i)%m_qext))
+            call json%add(rea,'ITAL_EXT_2',
+     .          reaclines(i)%ital_ext(2,1:reaclines(i)%m_qext))
+            call json%add(rea,'ITAL_EXT_3',
+     .          reaclines(i)%ital_ext(3,1:reaclines(i)%m_qext))
+            end if
          end if
 
         call json%add(reacs,rea)

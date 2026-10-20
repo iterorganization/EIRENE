@@ -162,7 +162,7 @@ C
             ELSE
               KK = K
             END IF
-            CALL EIRENE_FETCH_OUTAU (OUTAUI,ITAL,KK,ISTRA,IUNOUT)
+            CALL EIRENE_FETCH_OUTAUI (OUTAUI,ITAL,KK,ISTRA,IUNOUT)
 C
             IF (NSBOX_TAL /= NSBOX) THEN
               DO I=1,NSBOX
@@ -187,7 +187,7 @@ C
           write (cnfti,'(I0)') nfti
           write (cnfte,'(I0)') nfte
           FNAME =
-     .     'outtal_'//trim(cital)//'_'//trim(cistr)//
+     .     'outtal_'//trim(cistr)//'_'//trim(cital)//
      .           '_'//trim(cnfti)//'-'//trim(cnfte)
 
           IF (LFIRST) THEN

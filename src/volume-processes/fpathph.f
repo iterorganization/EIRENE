@@ -147,22 +147,17 @@ C
     3 CONTINUE
 C
 c  PH processes (photonic reactions)
-cdr:  unfinished. Do not use.
 c
 csw
-      if(phv_lgphot(iphot,0,0) == 0) goto 70
-      do 61 ipph=1,phv_nphoti(iphot)
+      if(LGPHPH(iphot,0,0) == 0) goto 70
+      do 61 ipph=1,NPHPHI(iphot)
 !  -->  lgxph, with x=ph, IRPH corresponds to: irei, ircx, ....
-        irph =phv_lgphot(iphot,ipph,0)
-!  -->  ipls: bulk, mit der interation, wie bei anderen auch.
-        ipls =phv_lgphot(iphot,ipph,1)
-        il   =phv_lgphot(iphot,ipph,2)
-!  -->  diese gibt es nicht bei ei, pi, cx,... prozessen
-cdr     il wird hier nirgends verwendet! kann evtl. ganz raus aus photonenmodul
-        kk   =phv_lgphot(iphot,ipph,3)
-!  -->  diese gibt es nicht bei ei, cx, pi prozessen,
-!       KK=NREAPI(IRPI) z.b. bei pi
-cdr     d.h. hier sollte kk=nreaph(IRPH) verwendet werden
+        irph =LGPHPH(iphot,ipph,0)
+!  -->  ipls: bulk, with iteration, just like others
+        ipls =LGPHPH(iphot,ipph,1)
+!  -->  kk=NREAPH(IRPH), analogous to KK=NREAPI(IRPI) for PI processes
+        kk   =NREAPH(IRPH)
+
         IF (LGVAC(K,IPLS)) GOTO 61
 C
 C  1.) RATE COEFFICIENT

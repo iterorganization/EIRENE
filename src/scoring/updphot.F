@@ -27,7 +27,7 @@ cdr dec.15: further corrections, lea --> leio, and other logical flags for turni
 cdr nov.15: tracklength estimators for eapl,empl,eipl: species ipl resolved.
 cdr apr.16: bug fix J.Lore re index in lgiel. This part of code is still unused,
 cdr         so no effect on any result.  Few further comments corrected
-cdr fix ph7  phv_lgphot --> lgphph
+cdr fix ph7 PHV_LGPHOT --> lgphph
 cdr feb.23: prepare for merging into subr. update (unified treatment)
 
 
@@ -94,7 +94,7 @@ C     INTEGER :: NPBGK
 C SECONDARY SPECIES IDENTIFIERS
       INTEGER :: IAT1,IAT2,IML1,IML2,IIO1,IIO2,IPH1,IPH2,IPL1,IPL2
 C PH PROCESSES
-      INTEGER :: IAPH,IRPH
+      INTEGER :: IXPH,IRPH,IPHPH
 C    .          ,UPDF        ! out, something for stim. emiss ?
       EXTERNAL :: EIRENE_UPTCOP
 
@@ -124,7 +124,7 @@ C
         DIST=CLPD(I)
         WTR=WV*DIST
         WTRE0=WTR*E0
-        WTRV=WTRE0*VEL*CNDYNPH
+        WTRV=WTR*VEL*CNDYNPH
         IRDO=NRCELL+NUPC(I)*NR1P2+NBLCKA
         IRD=NCLTAL(IRDO)
 
@@ -184,7 +184,12 @@ C
 C
 C  PRE-COLLISION RATES, ASSUME: TEST PARTICLES (AND THEIR ENERGY) ARE LOST
 C
-        IF ((LAST_EVENT%IFLAG == 1) .AND.
+cdr     IF ((LAST_EVENT%IFLAG == 1) .AND.
+cdr past event option turned off. 
+cdr biased results in 8 cell tests
+cdr but perfect balances in 1 cell tests. ???
+cdr i.e. something still not correct with this option.
+        IF ((LAST_EVENT%IFLAG == -1) .AND.  ! turns this option off.
      .      (LAST_EVENT%NCELL == IRD)) THEN
 cdr  particle was born, is now on first flight
 cdr  particle track is still in same cell
@@ -267,18 +272,20 @@ cdr This perfectly cancels the source rate. This is an "idle" Monte Carlo partic
           ENDIF
         END IF
 C
-C  OTHER (OT) CONTRIBUTION for photons
+C..........................................................................
+C
+C  PHOTONIC (PH) CONTRIBUTION for photons
 cdr  in analogy to CX processes. better: analogy to PI ? wg. stim emission ?
 C
-        IF (PHV_LGPHOT(IPHOT,0,0).EQ.0) GOTO 133
+        IF (LGPHPH(IPHOT,0,0).EQ.0) GOTO 133
 C  DEFAULT TRACKLENGTH ESTIMATOR
-        DO IAPH=1,PHV_NPHOTI(IPHOT)
-          IRPH=PHV_LGPHOT(IPHOT,IAPH,0)
+        DO IPHPH=1,NPHPHI(IPHOT)
+          IRPH=LGPHPH(IPHOT,IPHPH,0)
+          IPLS=LGPHPH(IPHOT,IPHPH,1)
 cdr  check IRPH=0 in initialisation phase only once
 cdr       if(IRPH == 0) cycle
-cdr
-          IPLS=PHV_LGPHOT(IPHOT,IAPH,1)
-cdr       UPDF=PHV_LGPHOT(IPHOT,IAPH,4)
+
+cdr       UPDF=LGPHPH(IPHOT,IPHPH,4)
           LOGPLS(IPLS,ISTRA)=.TRUE.
 C
           WTRSIG=WTR*SIGVPH(IRPH)
@@ -286,7 +293,7 @@ C
 C  COLLISION ESTIMATOR IN SUBR. COLLIDE ?
 C  COMPENSATE PRE-COLLISION RATES HERE
 C
-          IF (PHV_IESTOTPH(iphot,IRPH,1).NE.0) THEN
+          IF (IESTPH(IRPH,1).NE.0) THEN
             IF (LPPHPHT) THEN
 #if ( defined(USE_OPENMP) || defined(USE_EXT_OPENMP) )
 !$OMP ATOMIC
@@ -351,12 +358,12 @@ C
 C  POST-COLLISION RATES, ALL SECONDARIES (TEST AND BULK PARTICLES)
 C
 cdr-test    goto 133
-!pb         IF (PHV_N1STOTPH(iphot,IRPH,3).NE.0) THEN
-!pb PHV_N1STOTPH(iphot,IRPH,3) does not include bulk
+!pb         IF (N1STPH(IRPH,3).NE.0) THEN
+!pb N1STPH(IRPH,3) does not include bulk
 C  FIRST SECONDARY:
-              IF (PHV_N1STOTPH(iphot,IRPH,1).EQ.1) THEN
-                IAT1=PHV_N1STOTPH(iphot,IRPH,2)
-                INUM=PHV_N1STOTPH(iphot,IRPH,3)
+              IF (N1STPH(IRPH,1).EQ.1) THEN
+                IAT1=N1STPH(IRPH,2)
+                INUM=N1STPH(IRPH,3)
                 LOGATM(IAT1,ISTRA)=.TRUE.
                 IF (LPPHAT) THEN
 #if ( defined(USE_OPENMP) || defined(USE_EXT_OPENMP) )
@@ -385,9 +392,9 @@ C  FIRST SECONDARY:
                   END IF
                   LMETSP(NSPH+IAT1)=.TRUE.
                 END IF
-              ELSEIF (PHV_N1STOTPH(iphot,IRPH,1).EQ.2) THEN
-                IML1=PHV_N1STOTPH(iphot,IRPH,2)
-                INUM=PHV_N1STOTPH(iphot,IRPH,3)
+              ELSEIF (N1STPH(IRPH,1).EQ.2) THEN
+                IML1=N1STPH(IRPH,2)
+                INUM=N1STPH(IRPH,3)
                 LOGMOL(IML1,ISTRA)=.TRUE.
                 IF (LPPHML) THEN
 #if ( defined(USE_OPENMP) || defined(USE_EXT_OPENMP) )
@@ -416,9 +423,9 @@ C  FIRST SECONDARY:
                   END IF
                   LMETSP(NSPA+IML1)=.TRUE.
                 END IF
-              ELSEIF (PHV_N1STOTPH(iphot,IRPH,1).EQ.3) THEN
-                IIO1=PHV_N1STOTPH(iphot,IRPH,2)
-                INUM=PHV_N1STOTPH(iphot,IRPH,3)
+              ELSEIF (N1STPH(IRPH,1).EQ.3) THEN
+                IIO1=N1STPH(IRPH,2)
+                INUM=N1STPH(IRPH,3)
                 LOGION(IIO1,ISTRA)=.TRUE.
                 IF (LPPHIO) THEN
 #if ( defined(USE_OPENMP) || defined(USE_EXT_OPENMP) )
@@ -447,9 +454,9 @@ C  FIRST SECONDARY:
                   END IF
                   LMETSP(NSPAM+IIO1)=.TRUE.
                 END IF
-              ELSEIF (PHV_N1STOTPH(iphot,IRPH,1).EQ.4) THEN
-                IPL1=PHV_N1STOTPH(iphot,IRPH,2)
-C               INUM=PHV_N1STOTPH(iphot,IRPH,3)
+              ELSEIF (N1STPH(IRPH,1).EQ.4) THEN
+                IPL1=N1STPH(IRPH,2)
+C               INUM=N1STPH(IRPH,3)
                 INUM=1
                 LOGPLS(IPL1,ISTRA)=.TRUE.
                 IF (LPPHPL) THEN
@@ -486,9 +493,10 @@ cdr  if this bulk is a photon (same as iphot), dann noch eins rauf auf tally
                   LMETSP(NSPAMI+IPL1)=.TRUE.
                 END IF
 csw added branch
-              ELSEIF (PHV_N1STOTPH(iphot,IRPH,1).EQ.0) then
-                iph1=phv_n1stotph(iphot,IRPH,2)
-                inum=phv_n1stotph(iphot,IRPH,3)
+              ELSEIF (N1STPH(IRPH,1).EQ.0) then
+                iph1=N1STPH(IRPH,2)
+c               inum=N1STPH(IRPH,3)
+                inum=1                   
 cdr  test iph1 > 0 only once, in initialisation. here: removed
                 if ((inum > 0) .and. (iph1 > 0)) then
                   logphot(iph1,istra)=.true.
@@ -525,12 +533,13 @@ cdr  test iph1 > 0 only once, in initialisation. here: removed
               ENDIF
 !pb         END IF
 
-!pb         IF (PHV_N2NDOTPH(iphot,IRPH,3).NE.0) THEN
-!pb PHV_N2NDOTPH(iphot,IRPH,3) does not include bulk
+!pb         IF (N2NDPH(IRPH,3).NE.0) THEN
+!pb N2NDPH(IRPH,3) does not include bulk
 C  SECOND SECONDARY:
-              IF (PHV_N2NDOTPH(iphot,IRPH,1).EQ.1) THEN
-                IAT2=PHV_N2NDOTPH(iphot,IRPH,2)
-                INUM=PHV_N2NDOTPH(iphot,IRPH,3)
+              IF (N2NDPH(IRPH,1).EQ.1) THEN
+                IAT2=N2NDPH(IRPH,2)
+c               INUM=N2NDPH(IRPH,3)
+                inum=1   
                 LOGATM(IAT2,ISTRA)=.TRUE.
                 IF (LPPHAT) THEN
 #if ( defined(USE_OPENMP) || defined(USE_EXT_OPENMP) )
@@ -559,9 +568,10 @@ C  SECOND SECONDARY:
                   END IF
                   LMETSP(NSPH+IAT2)=.TRUE.
                 END IF
-              ELSEIF (PHV_N2NDOTPH(iphot,IRPH,1).EQ.2) THEN
-                IML2=PHV_N2NDOTPH(iphot,IRPH,2)
-                INUM=PHV_N2NDOTPH(iphot,IRPH,3)
+              ELSEIF (N2NDPH(IRPH,1).EQ.2) THEN
+                IML2=N2NDPH(IRPH,2)
+c               INUM=N2NDPH(IRPH,3)
+                inum=1 
                 LOGMOL(IML2,ISTRA)=.TRUE.
                 IF (LPPHML) THEN
 #if ( defined(USE_OPENMP) || defined(USE_EXT_OPENMP) )
@@ -590,9 +600,10 @@ C  SECOND SECONDARY:
                   END IF
                   LMETSP(NSPA+IML2)=.TRUE.
                 END IF
-              ELSEIF (PHV_N2NDOTPH(iphot,IRPH,1).EQ.3) THEN
-                IIO2=PHV_N2NDOTPH(iphot,IRPH,2)
-                INUM=PHV_N2NDOTPH(iphot,IRPH,3)
+              ELSEIF (N2NDPH(IRPH,1).EQ.3) THEN
+                IIO2=N2NDPH(IRPH,2)
+c               INUM=N2NDPH(IRPH,3)
+                inum=1 
                 LOGION(IIO2,ISTRA)=.TRUE.
                 IF (LPPHIO) THEN
 #if ( defined(USE_OPENMP) || defined(USE_EXT_OPENMP) )
@@ -621,9 +632,9 @@ C  SECOND SECONDARY:
                   END IF
                   LMETSP(NSPAM+IIO2)=.TRUE.
                 END IF
-              ELSEIF (PHV_N2NDOTPH(iphot,IRPH,1).EQ.4) THEN
-                IPL2=PHV_N2NDOTPH(iphot,IRPH,2)
-C               INUM=PHV_N2NDOTPH(iphot,IRPH,3)
+              ELSEIF (N2NDPH(IRPH,1).EQ.4) THEN
+                IPL2=N2NDPH(IRPH,2)
+C               INUM=N2NDPH(IRPH,3)
                 INUM=1
                 LOGPLS(IPL2,ISTRA)=.TRUE.
                 IF (LPPHPL) THEN
@@ -659,9 +670,10 @@ cdr  if this bulk is a photon (same as iphot), dann noch eins rauf auf tally
                   LMETSP(NSPAMI+IPL2)=.TRUE.
                 END IF
 csw added branch
-              ELSEIF (PHV_N2NDOTPH(iphot,IRPH,1).EQ.0) then
-                iph2=phv_n2ndotph(iphot,IRPH,2)
-                inum=phv_n2ndotph(iphot,IRPH,3)
+              ELSEIF (N2NDPH(IRPH,1).EQ.0) then
+                iph2=N2NDPH(IRPH,2)
+c               inum=N2NDPH(IRPH,3)
+                inum=1  
 cdr test iph2 > 0 removed, to be done only once in initialisation
                 if ((inum > 0) .and. (iph2 > 0)) then
                   logphot(iph2,istra)=.true.
@@ -704,7 +716,7 @@ C
 C  COLLISION ESTIMATOR IN SUBR. COLLIDE ?
 C  COMPENSATE PRE-COLLISION RATES HERE
 C
-          IF (LEPHPHT.AND.(PHV_IESTOTph(iphot,IRPH,3).NE.0)) THEN
+          IF (LEPHPHT.AND.(IESTPH(IRPH,3).NE.0)) THEN
 #if ( defined(USE_OPENMP) || defined(USE_EXT_OPENMP) )
 !$OMP ATOMIC
 #endif
@@ -721,25 +733,25 @@ cdr         IF (LEPHPL) EPHPL(IRD)    =EPHPL(IRD)  -WTRSIG*ESIGPH(IRPH)
 C
 C  POST-COLLISION RATES, ALL SECONDARIES (TEST AND BULK PARTICLES)
 
-!dr       IF (PHV_N1STOTPH(iphot,IRPH,3).NE.0) THEN
-!dr PHV_N1STOTPH(iphot,IRPH,3) does not include bulk
+!dr       IF (N1STPH(IRPH,3).NE.0) THEN
+!dr N1STPH(IRPH,3) does not include bulk
 C  FIRST SECONDARY:
 cdr: erstmal raus. vermutlich muss hier die energie des
 cdr  neuen schwerteilchens stehen, nicht die E0 des IPHOT.
-cdr         IF (PHV_N1STOTPH(iphot,IRPH,1).EQ.1) THEN
-cdr           IAT1=PHV_N1STOTPH(iphot,IRPH,2)
+cdr         IF (N1STPH(IRPH,1).EQ.1) THEN
+cdr           IAT1=N1STPH(IRPH,2)
 cdr           LOGATM(IAT1,ISTRA)=.TRUE.
 cdr           IF (LEPHAT) EPHAT(IRD)     = EPHAT(IRD)  +WTRSIG*E0
-C           ELSEIF (PHV_N1STOTPH(iphot,IRPH,1).EQ.2) THEN
-C             IML1=PHV_N1STOTPH(iphot,IRPH,2)
+C           ELSEIF (N1STPH(IRPH,1).EQ.2) THEN
+C             IML1=N1STPH(IRPH,2)
 C             LOGMOL(IML1,ISTRA)=.TRUE.
 C             IF (LEPHML) EPHML(IRD)     = EPHML(IRD)     +WTRSIG*E0
-cdr         ELSEIF (PHV_N1STOTPH(iphot,IRPH,1).EQ.3) THEN
-cdr           IIO1=PHV_N1STOTPH(iphot,IRPH,2)
+cdr         ELSEIF (N1STPH(IRPH,1).EQ.3) THEN
+cdr           IIO1=N1STPH(IRPH,2)
 cdr           LOGION(IIO1,ISTRA)=.TRUE.
 cdr           IF (LEPHIO) EPHIO(IRD)     = EPHIO(IRD)     +WTRSIG*E0
-cdr         ELSEIF (PHV_N1STOTPH(iphot,IRPH,1).EQ.4) THEN
-cdr           IPL1=PHV_N1STOTPH(iphot,IRPH,2)
+cdr         ELSEIF (N1STPH(IRPH,1).EQ.4) THEN
+cdr           IPL1=N1STPH(IRPH,2)
 cdr           LOGPLS(IPL1,ISTRA)=.TRUE.
 cdr           IF (LEPHPL) EPHPL(IRD)     = EPHPL(IRD)   +WTRSIG*E0
 csw added updf check (stim.em)
@@ -749,10 +761,10 @@ cdr           endif
 csw added branch
 cdr: photon scattering, e0_in = e0_out, also: delta scattering,
 cdr  mit eventuell teilchenmultiplikation
-cdr         ELSEIF (PHV_N1STOTPH(iphot,IRPH,1).EQ.0) THEN
-              IF (PHV_N1STOTPH(iphot,IRPH,1).EQ.0) THEN
-                IPH1=PHV_N1STOTPH(iphot,IRPH,2)
-                INUM=PHV_N1STOTPH(iphot,IRPH,2)
+cdr         ELSEIF (N1STPH(IRPH,1).EQ.0) THEN
+              IF (N1STPH(IRPH,1).EQ.0) THEN
+                IPH1=N1STPH(IRPH,2)
+                INUM=N1STPH(IRPH,2)
 cdr  if(iph1 > 0) then abfrage hier raus, nur in initialisation
                 LOGPHOT(IPH1,ISTRA)=.TRUE.
                 IF (LEPHPHT) THEN
@@ -764,24 +776,24 @@ cdr  if(iph1 > 0) then abfrage hier raus, nur in initialisation
               ENDIF
 !dr         ENDIF
 
-!dr     IF (PHV_N2NDOTph(iphot,IRPH,3).NE.0) THEN
-!dr PHV_N2NDOTph(iphot,IRPH,3) does not include bulk
+!dr     IF (N2NDPH(IRPH,3).NE.0) THEN
+!dr N2NDPH(IRPH,3) does not include bulk
 C  SECOND SECONDARY:
 cdr : gleiches problem wie oben E0_out ? bei test photon impact mit E0 ?
-cdr         IF (PHV_N2NDOTPH(iphot,IRPH,1).EQ.1) THEN
-cdr           IAT2=PHV_N2NDOTPH(iphot,IRPH,2)
+cdr         IF (N2NDPH(IRPH,1).EQ.1) THEN
+cdr           IAT2=N2NDPH(IRPH,2)
 cdr           LOGATM(IAT2,ISTRA)=.TRUE.
 cdr           IF (LEPHAT) EPHAT(IRD)     = EPHAT(IRD)     +WTRSIG*E0
-C           ELSEIF (PHV_N2NDOTPH(iphot,IRPH,1).EQ.2) THEN
-C             IML2=PHV_N2NDOTPH(iphot,IRPH,2)
+C           ELSEIF (N2NDPH(IRPH,1).EQ.2) THEN
+C             IML2=N2NDPH(IRPH,2)
 C             LOGMOL(IML2,ISTRA)=.TRUE.
 C             IF (LEPHML) EPHML(IRD)     = EPHML(IRD)     +WTRSIG*E0
-cdr         ELSEIF (PHV_N2NDOTPH(iphot,IRPH,1).EQ.3) THEN
-cdr           IIO2=PHV_N2NDOTPH(iphot,IRPH,2)
+cdr         ELSEIF (N2NDPH(IRPH,1).EQ.3) THEN
+cdr           IIO2=N2NDPH(IRPH,2)
 cdr           LOGION(IIO2,ISTRA)=.TRUE.
 cdr           IF (LEPHIO) EPHIO(IRD)     = EPHIO(IRD)     +WTRSIG*E0
-cdr         ELSEIF (PHV_N2NDOTPH(iphot,IRPH,1).EQ.4) THEN
-cdr           IPL2=PHV_N2NDOTPH(iphot,IRPH,2)
+cdr         ELSEIF (N2NDPH(IRPH,1).EQ.4) THEN
+cdr           IPL2=N2NDPH(IRPH,2)
 cdr           LOGPLS(IPL2,ISTRA)=.TRUE.
 cdr           IF (LEPHPL) EPHPL(IRD)     = EPHPL(IRD)     +WTRSIG*E0
 csw added updf check (stim.em)
@@ -789,10 +801,11 @@ cdr           if(updf==1.and.phv_is_plsphot(ipl2)>0) then
 cdr              IF (LEPHPL) EPHPL(IRD)     = EPHPL(IRD)     +WTRSIG*E0
 cdr           endif
 csw added branch
-cdr         ELSEIF (PHV_N2NDOTPH(iphot,IRPH,1).EQ.0) THEN
-              IF (PHV_N2NDOTPH(iphot,IRPH,1).EQ.0) THEN
-                IPH2=PHV_N2NDOTPH(iphot,IRPH,2)
-                INUM=PHV_N2NDOTPH(iphot,IRPH,3)
+cdr         ELSEIF (N2NDPH(IRPH,1).EQ.0) THEN
+              IF (N2NDPH(IRPH,1).EQ.0) THEN
+                IPH2=N2NDPH(IRPH,2)
+c               INUM=N2NDPH(IRPH,3)
+                inum=1 
 cdr if(iph2 > 0) then  ! dieser test nur in initialisation phase
                 if ((inum > 0) .and. (iph2 > 0)) then
                   LOGPHOT(IPH2,ISTRA)=.TRUE.

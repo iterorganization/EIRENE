@@ -426,13 +426,13 @@ C  NSPZTOT: storage parameter for LMETSP(NSPZTOT) array,
 C           for standard deviation estimators
         NSPZTOTS = NSPZ+NADV+NALV+NCLV+NCPV+NBGV+NSNV
         NSPZTOT = NSPZTOTS + (NATM+NMOL+NION+NPHOT+NPLS)*
-     p                       (NATMP+NMOLP+NION+NPHOTP)
+     p                       (NATMP+NMOLP+NIONP+NPHOTP)
 
 C  NSPZTOTW: storage parameter for LMETSPW(NSPZTOTW) array,
 C            for standard deviation estimators
         NSPZTOTWS = NSPZ+NADS+NALS
         NSPZTOTW = NSPZTOTWS + (NATM+NMOL+NION+NPHOT)*
-     p                        (NATMP+NMOLP+NION+NPHOTP)
+     p                        (NATMP+NMOLP+NIONP+NPHOTP)
 
 C  TOTAL NUMBER OF VOLUME-AVERAGED OUTPUT TALLIES
 C  SET IN SETPRM ACCORDING TO LIVING TALLIES SPECIFIED IN LIVTALV

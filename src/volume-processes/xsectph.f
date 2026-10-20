@@ -1,9 +1,12 @@
-Cdr  analogue to  xsecta, xsectm,.... printout to be sync.  
-cdr  And: call xstph for non-default photonic reaction options. 
+Cdr  analogue to  xsecta, xsectm, xsecti and xsectp
+cdr  Prepare processes for photon type test particles.
+cdr  Printout to be sync.
+cdr  And: call xstph for non-default photonic reaction options.
 cdr  Unfinished code, for photons.
 c
-Cdr  in xsectp, there only call to xstrc.f.
-cdr  At present: it seems to be just the other way round.
+Cdr  in xsectp, there is only a call to xstrc.f for iswr=7 (irph).
+cdr             needed there: a call to xstrc for iswr=6  (irrc)
+cdr  
 C
       SUBROUTINE EIRENE_XSECTPH
 C
@@ -21,20 +24,18 @@ cdr   PHOTON COLLISIONS, PH - type (separate from OT processes, which are
 cdr                                 of H.11, H.12 type, popul. ratios)
 c
       integer :: kk,iphot,idsc,nrc,ipl0,ipl1,ipl2,ityp1,ityp2,ifnd,
-     .           updf,mode,idph
+     .           updf,mode,irph
       EXTERNAL :: EIRENE_LEER, EIRENE_MASBOX
-
-      IDPH=0
 
       DO IPHOT=1,NPHOTI
         IDSC=0
-        PHV_LGPHOT(IPHOT,0,0)=0
-        PHV_LGPHOT(IPHOT,0,1)=0
+        LGPHPH(IPHOT,0,0)=0
+        LGPHPH(IPHOT,0,1)=0
 C
-C   AT PRESENT NO DEFAULT MODEL
+C   AT PRESENT NO DEFAULT (MINIMAL) MODEL
 C
         IF (NRCPH(IPHOT).EQ.0) THEN
-          PHV_NPHOTI(IPHOT)=0
+          NPHPHI(IPHOT)=0
 C
 C  NON-DEFAULT "PH" MODEL:
 C
@@ -42,61 +43,61 @@ C
           DO NRC=1,NRCPH(IPHOT)
             KK=IREACPH(IPHOT,NRC)
             IF (ISWR(KK).NE.7) CYCLE
-            IDSC=IDSC+1
-            IDPH=IDPH+1
-            NREAPH(IDPH) = KK
-            CALL EIRENE_PH_XSECTPH (IPHOT,NRC,IDSC)
-CDR  HERE SHOULD BE CALL TO XSTPH, GENERAL ROUTINE FOR PH PROCESSES
+cdr  This reaction no. NRC is a photonic reaction for IPHOT indeed.
+            IDSC=IDSC+1  ! count per line photon IPHOT
+            NRPHI=NRPHI+1 ! count all ph processes. 
+            IRPH=NRPHI
+            LGPHPH(IPHOT,IDSC,0)=IRPH
+
+            NREAPH(IRPH) = KK
+            CALL EIRENE_XSTPH (IPHOT,NRC,IRPH,IDSC)
           ENDDO
-          PHV_NPHOTI(IPHOT)=IDSC
+          NPHPHI(IPHOT)=IDSC
 C  NO "PH" MODEL DEFINED
         ELSE
-          PHV_NPHOTI(IPHOT)=0
+          NPHPHI(IPHOT)=0
         ENDIF
 
-CDR     PHV_NPHOTIM(IPHOT)=PHV_NPHOTI(IPHOT)-1
-
-        PHV_LGPHOT(IPHOT,0,0)=IDSC
+        NPHPHIM(IPHOT)=NPHPHI(IPHOT)-1
+        LGPHPH(IPHOT,0,0)=NPHPHI(IPHOT)
 
       ENDDO
-csw
-csw output:
-csw
+
+cdr sync terminolgy with rest of code
+cdr unfinished
+
       DO IPHOT=1,NPHOTI
 C
         IF (TRCAMD) THEN
           CALL EIRENE_MASBOX ('PHOTON SPECIES IPHOT = '//TEXTS(IPHOT))
           CALL EIRENE_LEER(1)
 C
-          IF(PHV_NPHOTI(iphot).eq.0) then
+          IF(NPHPHI(iphot).eq.0) then
             CALL EIRENE_LEER(1)
-            WRITE (iunout,*) 'NO "PH"-REACTION FOR THIS PHOTON'
+            WRITE (iunout,*) 'NO PHOTONIC REACTION WITH BULK PARTICLES'
             CALL EIRENE_LEER(1)
           ELSE
-            DO IDSC=1,PHV_NPHOTI(IPHOT)
+            DO IDSC=1,NPHPHI(IPHOT)
+
+              irph=LGPHPH(iphot,idsc,0)
+              ipl0=LGPHPH(iphot,idsc,1)
               CALL EIRENE_LEER(1)
-              WRITE (iunout,*) '(OTHER) REACTION NO. IRPH= ',IDSC
+              WRITE (iunout,*) 'PHOTONIC REACTION NO. IRPH= ',IRPH
               CALL EIRENE_LEER(1)
 
-                  ipl0=PHV_LGPHOT(iphot,idsc,1)
-                  ifnd=PHV_LGPHOT(iphot,idsc,2)
-                  kk=PHV_LGPHOT(iphot,idsc,3)
-                  updf=PHV_LGPHOT(iphot,idsc,4)
-                  mode=PHV_LGPHOT(iphot,idsc,5)
+              ityp1=N1STph(irph,1)
+              ipl1= N1STph(irph,2)
+              ityp2=N2NDph(irph,1)
+              ipl2= N2NDph(irph,2)
 
-                  ityp1=PHV_N1STOTph(iphot,idsc,1)
-                  ipl1= PHV_N1STOTph(iphot,idsc,2)
-                  ityp2=PHV_N2NDOTph(iphot,idsc,1)
-                  ipl2= PHV_N2NDOTph(iphot,idsc,2)
-
-                  write (iunout,*) 'irph,ipl0,il,kk,updf,mode'
-                  write (iunout,*)  idsc,ipl0,ifnd,kk,updf,mode
-                  write (iunout,*) 'ityp1,ipl1,ityp2,ipl2'
-                  write (iunout,*)  ityp1,ipl1,ityp2,ipl2
-                  call EIRENE_leer(1)
-               enddo
-            endif
-         endif
+              write (iunout,*) 'irph,ipl0,kk'
+              write (iunout,*)  irph,ipl0,kk
+              write (iunout,*) 'ityp1,ipl1,ityp2,ipl2'
+              write (iunout,*)  ityp1,ipl1,ityp2,ipl2
+              call EIRENE_leer(1)
+            enddo
+          endif
+        endif
       enddo
 
       RETURN

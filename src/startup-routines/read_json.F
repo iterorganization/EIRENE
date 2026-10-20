@@ -79,21 +79,42 @@ cdr  optional arguments for FILNAM=CONST options
      .             RC1MIN, RC1MAX, FP1, JFEX1MN, JFEX1MX,
      .             RC2MIN, RC2MAX, FP2, JFEX2MN, JFEX2MX,
      .             ELNAME, IZ1, BUNDLING,
-! for internal CR models, line emission etc..
+cdr  optional parameters
+     .             M_popesc, M_upper, M_lower,  ! for internal CR models, line emission etc..
      .             IROW_ESC, ICOL_ESC, POP_ESC,
-     .             IFTFL, NCOEF, COEF)  ! for filnam=const
+cdr  optional parameters
+     .             M_qext,                      ! for internal CR models, line emission etc..
+     .             IROW_EXT, ITAL_EXT,
+cdr  optional arguments for FILNAM=CONST options
+     .             IFTFL, NCOEF, COEF,
+cdr  optional arguments for FILNAM=PHOTONS options
+     .             IPRFTYPE)
+
         USE EIRMOD_PRECISION
-        INTEGER,      INTENT(IN) :: IR, IZ1
-        INTEGER,      INTENT(IN), OPTIONAL :: IROW_ESC, ICOL_ESC,
-     .                                        IFTFL, NCOEF
-        REAL(DP),     INTENT(IN), OPTIONAL :: POP_ESC
-        REAL(DP),     INTENT(IN), OPTIONAL :: COEF(9)
-        CHARACTER(LEN=*), INTENT(IN), OPTIONAL :: BUNDLING
+        INTEGER,      INTENT(IN) :: IR
         CHARACTER(8), INTENT(IN) :: FILNAM
         CHARACTER(4), INTENT(IN) :: H123
         CHARACTER(LEN=*), INTENT(IN) :: REAC
-        CHARACTER(2), INTENT(IN) :: ELNAME
         CHARACTER(3), INTENT(IN) :: CRC
+c  optional input for slreac: TAB2D or ADAS model data
+        INTEGER,      INTENT(IN) :: IZ1
+        CHARACTER(2), INTENT(IN) :: ELNAME
+c  optional input for slreac: CR model data
+        INTEGER,      INTENT(IN), OPTIONAL :: M_popesc, M_upper,
+     .                                           M_lower
+        INTEGER,      INTENT(IN), OPTIONAL :: IROW_ESC(:),
+     .                                           ICOL_ESC(:)
+        REAL(DP),     INTENT(IN), OPTIONAL :: POP_ESC(:)
+c  optional input for slreac: CR model data
+        INTEGER,      INTENT(IN), OPTIONAL :: M_qext
+        INTEGER,      INTENT(IN), OPTIONAL :: IROW_EXT(:),
+     .                                           ITAL_EXT(:,:)
+c  optional input for slreac: filnam=CONST option
+        INTEGER,      INTENT(IN), OPTIONAL :: IFTFL, NCOEF
+        REAL(DP),     INTENT(IN), OPTIONAL :: COEF(9)
+c  optional input for slreac: filnam=PHOTONS option
+        INTEGER,      INTENT(IN), OPTIONAL :: IPRFTYPE
+        CHARACTER(LEN=*), INTENT(IN), OPTIONAL :: BUNDLING
         INTEGER,  INTENT(IN OUT) :: JFEX1MN, JFEX1MX,JFEX2MN, JFEX2MX
         REAL(DP), INTENT(IN OUT) :: RC1MIN, RC1MAX, FP1(6),
      .                              RC2MIN, RC2MAX, FP2(6)
@@ -1187,7 +1208,7 @@ C  OVERWRITE DEFAULTS FOR IRPTA, IRPTE ARRAYS
 !  check for local reflection model directly specified with the surface
         call json%get(srf,'ILREF',ilr,foundr)
         if (foundr) then
-          ilref(nlj) = ilr
+          ilref(1,nlj) = ilr
           call json%get(srf,'ILSPT',ilspt(nlj),found)
           call json%get(srf,'ISRS',isrs(1,nlj),found)
           call json%get(srf,'ISRC',isrc(1,nlj),found)
@@ -1548,11 +1569,16 @@ C
       logical :: found, foundr, found_crs
       integer :: nrea, ir, mp, mt, iz,
      .           jfex1mn, jfex1mx, jfex2mn, jfex2mx, iftfl, ncoef,
-     .           irow_esc, icol_esc, ncrs, k, ll
-      real(dp) :: r1mn, r1mx, r2mn, r2mx, fp1(6), fp2(6),
-     .            RC1MIN, RC1MAX, RC2MIN, RC2MAX, pop_esc, pesc
-      real(dp), allocatable :: ffp1(:), ffp2(:), ccoef(:)
-      real(dp) :: coef(9)
+     .           ncrs, k, ll, m_qext, m_popesc, m_upper, m_lower, 
+     .           iprftype
+      real(dp) :: r1mn, r1mx, r2mn, r2mx, fp1(6), fp2(6), coef(9),
+     .            RC1MIN, RC1MAX, RC2MIN, RC2MAX
+      real(dp), allocatable :: ffp1(:), ffp2(:), ccoef(:),
+     .                         pop_esc(:), pesc(:)
+      integer, allocatable :: irow_esc(:), icol_esc(:),
+     .                        irow_ext(:), ital_ext_1(:),
+     .                        ital_ext_2(:), ital_ext_3(:)
+      integer, allocatable :: ital_ext(:,:)
 !cym/cpg : changed type
       character(kind=json_CK,len=:), allocatable :: chr
       character(kind=json_CK,len=8) :: filnam
@@ -1626,11 +1652,17 @@ C
           crc = '   '
           elname = '  '
           iz = 0
-          irow_esc = 0
-          icol_esc = 0
-          pop_esc = 1._dp
+cdr  additional (optional) data for internal CR-codes
+          m_popesc = 0
+          m_qext   = 0
+cdr  m_upper, m_lower: currently not needed. tbd: To be used to
+cdr                    turn population coefficient into an individual line emissivity
+cdr  icol and irow are now vectors
+          m_upper = 0
+          m_lower = 0
+cdr  additional data for filnam: PHOTON
+          iprftype = 0
           ncoef = 0
-          coef = 0._dp
           iftfl = 0
           mp = 0
           mt = 0
@@ -1722,7 +1754,6 @@ c  2nd parameter in 2 parametric data
           else
             iftfl = 0
             ncoef = 0
-            coef = 0._dp
           end if
 
           if (index(filnam,json_ck_'ADAS') > 0 .or.
@@ -1747,14 +1778,47 @@ c  2nd parameter in 2 parametric data
           end if
 
           if (index(filnam,json_ck_'CR') /= 0) then
-            call json%get(prea,'IROW_ESC',irow_esc,found)
-            call json%get(prea,'ICOL_ESC',icol_esc,found)
-            call json%get(prea,'POP_ESC',pesc,found)
-            if (found) pop_esc = pesc
-          else
-            IROW_ESC = 0
-            ICOL_ESC = 0
-            POP_ESC = 1.0
+            call json%get(prea,'M_POPESC',m_popesc,found)
+            if (m_popesc > 0) then
+              if (ALLOCATED(irow_esc)) then
+                  DEALLOCATE (irow_esc)
+                  DEALLOCATE (icol_esc)
+                  DEALLOCATE (pop_esc)
+              end if
+              ALLOCATE(irow_esc(m_popesc), SOURCE = 0)
+              ALLOCATE(icol_esc(m_popesc), SOURCE = 0)
+              ALLOCATE(pop_esc(m_popesc), SOURCE = 1._DP)
+              call json%get(prea,'IROW_ESC',irow_esc,found)
+              call json%get(prea,'ICOL_ESC',icol_esc,found)
+              call json%get(prea,'POP_ESC',pop_esc,found)
+            end if
+            call json%get(prea,'M_QEXT',m_qext,found)
+            if (m_qext > 0) then
+              if (ALLOCATED(irow_ext)) then
+                  DEALLOCATE (irow_ext)
+                  DEALLOCATE (ital_ext)
+                  DEALLOCATE (ital_ext_1)
+                  DEALLOCATE (ital_ext_2)
+                  DEALLOCATE (ital_ext_3)
+              end if
+              ALLOCATE(irow_ext(m_qext), SOURCE = 0)
+              ALLOCATE(ital_ext(3,m_qext), SOURCE = 0)
+crc separate ital_ext due to json%get vector argument limitation
+              ALLOCATE(ital_ext_1(m_qext), SOURCE = 0)
+              ALLOCATE(ital_ext_2(m_qext), SOURCE = 0)
+              ALLOCATE(ital_ext_3(m_qext), SOURCE = 0)
+              call json%get(prea,'IROW_EXT',irow_ext,found)
+              call json%get(prea,'ITAL_EXT_1',ital_ext_1,found)
+              call json%get(prea,'ITAL_EXT_2',ital_ext_2,found)
+              call json%get(prea,'ITAL_EXT_3',ital_ext_3,found)
+crc recombine ital_ext for slreac call later
+              ital_ext(1,1:m_qext) = ital_ext_1(1:m_qext)
+              ital_ext(2,1:m_qext) = ital_ext_2(1:m_qext)
+              ital_ext(3,1:m_qext) = ital_ext_3(1:m_qext)              
+            end if
+crc not used
+c            call json%get(prea,'M_UPPER',m_upper,found)
+c            call json%get(prea,'M_LOWER',m_lower,found)
           end if
 C
 C  SAVE INPUT LINES ON REACLINES,  FOR WRITING ONTO JSON-FILE
@@ -1782,9 +1846,23 @@ C       ONLY NEEDED FOR AUTOMATED INTERFACE TO HYDKIN DATABASE.
           REACLINES(IL)%JFEX2MX = 0
           REACLINES(IL)%FP1 = 0._DP
           REACLINES(IL)%FP2 = 0._DP
-          REACLINES(IL)%IROW_ESC = IROW_ESC
-          REACLINES(IL)%ICOL_ESC = ICOL_ESC
-          REACLINES(IL)%POP_ESC = POP_ESC
+          REACLINES(IL)%M_POPESC = M_POPESC
+          IF (M_POPESC >0) THEN
+           ALLOCATE(REACLINES(IL)%IROW_ESC(M_POPESC))
+           ALLOCATE(REACLINES(IL)%ICOL_ESC(M_POPESC))
+           ALLOCATE(REACLINES(IL)%POP_ESC(M_POPESC))
+            REACLINES(IL)%IROW_ESC(1:M_POPESC) = IROW_ESC(1:M_POPESC)
+            REACLINES(IL)%ICOL_ESC(1:M_POPESC) = ICOL_ESC(1:M_POPESC)
+            REACLINES(IL)%POP_ESC(1:M_POPESC) = POP_ESC(1:M_POPESC)
+          END IF
+          REACLINES(IL)%M_QEXT = M_QEXT
+          IF (M_QEXT >0) THEN
+           ALLOCATE(REACLINES(IL)%IROW_EXT(M_QEXT))
+           ALLOCATE(REACLINES(IL)%ITAL_EXT(3,M_QEXT))
+           REACLINES(IL)%IROW_EXT(1:M_QEXT) = IROW_EXT(1:M_QEXT)
+           REACLINES(IL)%ITAL_EXT(1:3,1:M_QEXT) = 
+     .      ITAL_EXT(1:3,1:M_QEXT)
+          END IF
           REACLINES(IL)%IFTFLG = IFTFL
           REACLINES(IL)%NCOEF = NCOEF
           IF (NCOEF > 0) REACLINES(IL)%COEF(1:NCOEF) = COEF(1:NCOEF)
@@ -1811,17 +1889,21 @@ C  PROCESSING (MASS SCALING, POTENTIAL ENERGY INCREMENT) IN XSTCX,XSTEI,...
           CRCc=CRC
           ELNAMEc=ELNAME
           BUNDLINGC=BUNDLING
-          CALL EIRENE_SLREAC (IR,FILNAMC,H123C,REACC,CRCC,
-! additional input card: asymptotics P1
-     .                  RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
-! additional input card: asymptotics P2
-     .                  RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
-! additional input card read for TAB2D/ADAS format
-     .                  ELNAMEC,IZ,BUNDLINGC,
-! (optional) additional input card read CR  internal models
-     .                  IROW_ESC,ICOL_ESC,POP_ESC,
-! (optional) for "CONST models"
-     .                  IFTFL, NCOEF, COEF)
+          CALL EIRENE_SLREAC (IR,FILNAM,H123,REAC,CRC,
+          ! additional input card: asymptotics P1
+     .               RC1MIN,RC1MAX,FP1,JFEX1MN,JFEX1MX,
+          ! additional input card: asymptotics P2
+     .               RC2MIN,RC2MAX,FP2,JFEX2MN,JFEX2MX,
+          ! additional input card read for TAB2D/ADAS format
+     .               ELNAME,IZ,BUNDLING,
+          ! (optional) additional input card read CR internal models
+     .               M_POPESC,M_UPPER,M_LOWER,
+     .               IROW_ESC,ICOL_ESC,POP_ESC,
+     .               M_QEXT,
+     .               IROW_EXT,ITAL_EXT,
+          ! (optional) for "CONST models"
+     .               IFTFL,NCOEF,COEF,
+     .               IPRFTYPE)
 !cym/cpg end
 
           nullify(prea)
@@ -2897,6 +2979,7 @@ c  read surface models identified by character string 'SURFMOD_...'
 
         do imod = 1, nmods
           ALLOCATE (REFCUR)
+          ALLOCATE (REFCUR%JLREF(nspz))
           ALLOCATE (REFCUR%JSRS(nspz))
           ALLOCATE (REFCUR%JSRC(nspz))
           ALLOCATE (REFCUR%JLCHSPNWL(nspz))
@@ -2914,6 +2997,7 @@ c  read surface models identified by character string 'SURFMOD_...'
           ALLOCATE (REFCUR%ESPTCR(nspz))
           NULLIFY (REFCUR%SPEC_LINES)
 
+          REFCUR%JLREF = 0
           REFCUR%JSRS = 0
           REFCUR%JSRC = 0
           REFCUR%JLCHSPNWL = 0
@@ -2935,7 +3019,7 @@ c  read surface models identified by character string 'SURFMOD_...'
           call json%get(pchild,'NAME',txt,found)
           REFCUR%REFNAME = TRIM(ADJUSTL(TXT(9:)))
 
-          call json%get(pchild,'ILREF',REFCUR%JLREF, found)
+          call json%get(pchild,'ILREF',REFCUR%JLREF(1), found)
           call json%get(pchild,'ILSPT',REFCUR%JLSPT, found)
           call json%get(pchild,'ISRS',REFCUR%JSRS(1), found)
           call json%get(pchild,'ISRC',REFCUR%JSRC(1), found)
@@ -2957,6 +3041,7 @@ c  read surface models identified by character string 'SURFMOD_...'
           call json%get(pchild,'EXPEL',REFCUR%EXPELR(1), found)
           call json%get(pchild,'EXPIL',REFCUR%EXPILR(1), found)
 
+          REFCUR%JLREF(2:NSPZ) = REFCUR%JLREF(1)
           REFCUR%JSRS(2:NSPZ) = REFCUR%JSRS(1)
           REFCUR%JSRC(2:NSPZ) = REFCUR%JSRC(1)
           REFCUR%JLCHSPNWL(2:NSPZ) = REFCUR%JLCHSPNWL(1)    !VK
@@ -3005,7 +3090,7 @@ C  DEFAULT SPUTER MODEL
             ENDDO
             ideflt_sput = 1
 !Pressure feedback loop model
-            IF (REFCUR%JLREF == 4)
+            IF (REFCUR%JLREF(1) == 4)
      .         WRITE(IUNOUT,*) "PFL with parameters: ",
      .           REFCUR%REFCELL, REFCUR%REFPRESS
           end if
@@ -4838,6 +4923,7 @@ cdr  upper state population is n_B *pop_B(upper)= n_A * ratio * pop_B(upper)
                     call json%get_child(prats,irt,prat,found)
                     call json%get(prat,'IRC_RAT',
      .                            cnt%irc_rat(irt),found)
+
 cdr   Read a second density ratio.
 cdr   It may turn out that, after reading the first density ratio,
 cdr   that now the new parent density n_A is still not amongst the density

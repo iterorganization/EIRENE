@@ -494,7 +494,6 @@ C
             IF (LEIPL)  EIPL(IPLS,J) =EIPL(IPLS,J) *ZVOLIW(J)
             IF (LEPHPL) EPHPL(IPLS,J)=EPHPL(IPLS,J)*ZVOLIW(J)
             IF (LEPPL)  EPPL(IPLS,J) =EPPL(IPLS,J) *ZVOLIW(J)
-
             DO ICO=0,2
               KK=ICO*NPLS
               IF (LMAPL_VEC)  MAPL_VEC(KK+IPLS,J) =

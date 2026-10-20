@@ -33,7 +33,7 @@ cdr         But corresponds to what would be called XSTPH?,
 cdr         (what is XSTRC?)
 cdr nov 18: notational cleanup: nrot -> nrph. nnrot  is now obsolete.
 cdr nov 20: remove alloc_xsectph, all variables now in comxs
-cdr
+crc oct 24: remove eirene_line_cutoff
 !................................................................................
 
 !  photon.f  this modules contains routines to sample, evaluate
@@ -114,21 +114,20 @@ c          some more speed ups in lorvdwprof. still much more to be done
 
 
       PUBLIC :: eirene_ph_init, eirene_ph_energy, eirene_ph_getcoeff,
-     .    eirene_ph_xsectph,
-     .    eirene_ph_post_energy, eirene_ph_alloc_xsectph,
+     .    eirene_ph_post_energy,
      .    eirene_ph_lorvdw, eirene_planck,
-     .    eirene_ph_b12, eirene_ph_b21,
-!pb black body removal (core saturation)
-     .    eirene_line_cutoff
+     .    eirene_ph_b12, eirene_ph_b21
 
       PUBLIC :: EIRENE_BROADCAST_PHOTON
 
       integer, public, save  :: phv_muldens
       integer, public, save, allocatable ::
-     .   PHV_LGAOT(:,:,:),PHV_LGPHOT(:,:,:),
-     .   PHV_NAOTI(:),PHV_NPHOTI(:),PHV_IESTOTPH(:,:,:),
+     .   PHV_LGAOT(:,:,:),
+cdr  .   LGPHPH(:,:,:),NPHPHI(:),   now: comxs
+     .   PHV_NAOTI(:),
+cdr  .   IESTPH(:,:,:),  now: comxs
      .   PHV_IESTOTAT(:,:,:),
-     .   PHV_N1STOTPH(:,:,:),PHV_N2NDOTPH(:,:,:),
+cdr  .   N1STPH(:,:,:),N2NDPH(:,:,:), now: comxs
      .   PHV_N1STOTAT(:,:,:),PHV_N2NDOTAT(:,:,:),
      .   phv_xistra(:)
 csw constants
@@ -195,7 +194,7 @@ c CROSS-SECTIONS, RATES, RATE COEFFICIENTS
 
       SUBROUTINE EIRENE_PH_GETCOEFF(kkin,isp,ity,icell,iipl,fac,res)
 c  evaluate absorption, emission and stim. emission rate coeff.  "res" (cm**3/s)
-c  for a photon with energy E=E0, in cell icell.
+c  for a photon with energy E=E0, in cell ICELL.
 C  This requires evaluation of the absorption line shape profiles "iptype"
 C  current version: iptype=0,1,2,3,4,5,6,7,8,9,10,11
 
@@ -239,10 +238,9 @@ c     .            omega_min
 c  reaction data for process kkin are now loaded into "reaction"
 c  includes also reaction%b12.
 c
-      if (kkin /= idreac) call EIRENE_get_reaction(kkin)
+c      if (kkin /= idreac) call EIRENE_get_reaction(kkin)
       kk=kkin
-
-      iid = reaction%ircart
+      iid = reacdat(kk)%phr%line%ircart
       fac=0._dp
       hwvdw=0._dp
       ctheta =0._dp
@@ -267,11 +265,11 @@ c     P.2 PH_ABS OT, P.2 PH_STIM OT
             return
          endif
 
-         e00=reaction%e0  ! line center
+         e00=reacdat(kk)%phr%line%e0  ! line center
          pnue0 = e00*EV2HZ
          pnue  = e0 *EV2HZ
 
-         iptype = reaction%iprofiletype
+         iptype = reacdat(kk)%phr%line%iprofiletype
          select case(iptype)
 
          case(0)
@@ -281,15 +279,15 @@ cdr or, old version ??
             FAC=0._DP
             if (abs(E0-e00)/e00.lt.eps12) fac=1._DP
          case(1)
-            call EIRENE_dopplerprof(iipl,icell,dnd,drft)
+            call EIRENE_dopplerprof(iipl,kk,icell,dnd,drft)
             xx=e0-(e00+drft)
             fac = EIRENE_DOPPLER(xx,dnd)
          case(2)
-            call EIRENE_naturalprof(gam)
+            call eirene_naturalprof(kk,gam)
             xx = e0-e00
             fac = EIRENE_LORENTZ(xx, gam)
          case(3)
-            call EIRENE_voigtprof(iipl,icell,dnd,drft,gam)
+            call EIRENE_voigtprof(iipl,kk,icell,dnd,drft,gam)
             xx=(e0-(e00+drft))/dnd
             yy=gam*0.5_dp/dnd
             fac = REAL(EIRENE_PH_FADDEEVA(xx,yy,dnd), DP)
@@ -303,7 +301,7 @@ c           hwvdw=fwhm
 c           fac = EIRENE_ph_lorvdw(xx, fwhm, shift, dvdw, icell)
 c           fac=fac*hpcl/(e0*e0)
 c  use energy scale
-            call  EIRENE_lorvdwprof(icell,fwhm,shift,dvdw,.true.)
+            call  EIRENE_lorvdwprof(kk,icell,fwhm,shift,dvdw,.true.)
             xx = E0-E00
             hwvdw=fwhm
             fac = EIRENE_ph_lorvdw(-xx, fwhm, -shift, dvdw, icell)
@@ -321,20 +319,20 @@ c  use energy scale
                fac = EIRENE_zm_profile(e0,ctheta2,dbz,gam,dnd,drft,
      .                                 e00,6)
             elseif (iptype == 7) then
-               call EIRENE_dopplerprof(iipl,icell,dnd,drft)
+               call EIRENE_dopplerprof(iipl,kk,icell,dnd,drft)
                fac = EIRENE_zm_profile(e0,ctheta2,dbz,gam,dnd,drft,
      .                                 e00,7)
             endif
          case(8,9)
 !normal zeeman: lorentz or voigt components
            call EIRENE_zeeman_normalprof(icell,ctheta2,dbz)
-           call EIRENE_naturalprof(gam)
+           call eirene_naturalprof(kk,gam)
            if(iptype == 8) then
              dnd=0._dp
              drft=0._dp
              fac = EIRENE_zm_profile(e0,ctheta2,dbz,gam,dnd,drft,e00,8)
            elseif (iptype == 9) then
-             call EIRENE_dopplerprof(iipl,icell,dnd,drft)
+             call EIRENE_dopplerprof(iipl,kk,icell,dnd,drft)
              fac = EIRENE_zm_profile(e0,ctheta2,dbz,gam,dnd,drft,e00,9)
            endif
 
@@ -373,7 +371,7 @@ c    .             npt,omega_min,omega_max)
 
            elseif (iptype == 11) then
 c  With Doppler broadening by absorbing gas
-             call EIRENE_dopplerprof(iipl,icell,dnd,drft)
+             call EIRENE_dopplerprof(iipl,kk,icell,dnd,drft)
 c            T_g=TIIN(mplsti(iipl),icell)
 c            v=0.0
 c  only one evaluation at E0-E00
@@ -387,20 +385,27 @@ c            npt=1
 
 c    .             npt,omega_min,omega_max)
            endif
+         case default
+           write (iunout,*) 'invalid line shape in ph_getcoeff'
+           call eirene_exit_own(1)
         end select ! iptype
+
+      case(1,2,3)  
+cdr  atom in radiation field. Currently out.
+
       end select ! iid
 
       select case(iid)
 
          case(4)    ! absorption
-            res=e00*reaction%b12
+            res=e00*reacdat(kk)%phr%line%b12
 c  result should have units cm**3/s
 c  --> multiply with absorber density to make it a rate!
             phv_muldens=1
             res=res*fac*clight/(4._dp*PIA)
 
          case(5)    ! stimulated emission
-            res=e00*reaction%b21
+            res=e00*reacdat(kk)%phr%line%b21
 c  result should have units cm**3/s
 c  --> multiply with upper state density to make it a rate!
             phv_muldens=1
@@ -408,7 +413,7 @@ c  --> multiply with upper state density to make it a rate!
 
          case(6)     ! spontaneous emission
 c     P.1 AT_AIK OT
-           res=reaction%aik
+           res=reacdat(kk)%phr%line%aik
 c  result should have units 1/s,
 c  --> do not multiply with density in calling program!
 c  --> divide by upper state density to make it a rate coefficient!
@@ -440,9 +445,9 @@ c
 c        fac = ..... from line profile
 c
 c        d1=DIIN(iipl,icell)
-c        if ((phv_n1stotph(isp,idsc,1) == 4) .and.
-c    .       (phv_n1stotph(isp,idsc,3) == 1)) then
-c           ipl2=phv_n1stotph(isp,idsc,2)
+c        if ((N1STPH(isp,idsc,1) == 4) .and.
+c    .       (N1STPH(isp,idsc,3) == 1)) then
+c           ipl2=N1STPH(isp,idsc,2)
 c           d2=DIIN(ipl2,icell)
 c        else
 c           d2=0._dp
@@ -856,33 +861,34 @@ c     epsilon=(e/hbar)*phi_i*((N*1.e6)**(-1./3.))/v0
 
 
 
-      REAL(DP) FUNCTION EIRENE_PH_B12() result(res)
+      REAL(DP) FUNCTION EIRENE_PH_B12(kk) result(res)
 c  photon absorption B12 coefficient, obtained from stim. em. B21 coefficient by detailed balancing
       IMPLICIT NONE
 c calculates B12 Einstein coefficient in units: cm**2
 ! change G1, G2 to REAL, better precision, avoid integer division
       real(dp) :: g1,g2
+      integer, intent(in) :: kk
 
-      res=EIRENE_PH_B21()  ! units:
+      res=EIRENE_PH_B21(kk)  ! units:
 
-      g1=reaction%g1
-      g2=reaction%g2
+      g1=reacdat(kk)%phr%line%g1
+      g2=reacdat(kk)%phr%line%g2
 
       res=res*g2/g1
       return
       END FUNCTION EIRENE_PH_B12
 
 
-      REAL(DP) FUNCTION EIRENE_PH_B21() result(res)
+      REAL(DP) FUNCTION EIRENE_PH_B21(kk) result(res)
 c stim. photon emission B21 coefficient, obtained from A21, by detailed balancing
       IMPLICIT NONE
 c calculates B21 Einstein coefficient in units: cm**2
-
+      integer, intent(in) :: kk
       real(DP) :: e00
 
-      e00=reaction%e0
+      e00=reacdat(kk)%phr%line%e0
 
-      res=reaction%aik
+      res=reacdat(kk)%phr%line%aik
       res=res * (hplnk*clight)**2 / (2.*e00**3)
 c convert [cm^2 / (eV*s) ] --> [cm^2]
       res=res*hplnk
@@ -947,10 +953,9 @@ c      real(dp) :: dl, l0, l00
       ctheta2=0._dp
 
 !  idreac: kk from last call to get_reaction
-      if (idreac /= kk) call EIRENE_get_reaction(kk)
-      e00=reaction%e0
+      e00=reacdat(kk)%phr%line%e0
 
-      select case(reaction%iprofiletype)
+      select case(reacdat(kk)%phr%line%iprofiletype)
 
 !  unless otherwise stated, sampling is in eV
 
@@ -966,14 +971,14 @@ cdr      res = sam_doppler(dnd,drft,e00)
          nldoppl=.true.
       case(2)
 c  lorentz, no doppler
-         call EIRENE_naturalprof(gam)
+         call eirene_naturalprof(kk,gam)
          res = EIRENE_sam_lorentz(gam,e00)
          nldoppl=.false.
       case(3)
 c  lorentz plus doppler
 cdr      call voigtprof(ipl2,icell,dnd,drft,gam)
 cdr      res = sam_voigt(gam,dnd,drft,e00)
-         call EIRENE_NATURALPROF(gam)
+         call eirene_naturalprof(kk,gam)
          res = EIRENE_sam_lorentz(gam,e00)
          nldoppl=.true.
       case(4)
@@ -995,7 +1000,7 @@ c        res = hpcl/l0
 c        nldoppl=.false.
 c
 c  default: sampling e0 and de=e00-e0 in energy (frequency) units
-         call EIRENE_lorvdwprof(icell,fwhm,shift,dvdw,.true.)
+         call EIRENE_lorvdwprof(kk,icell,fwhm,shift,dvdw,.true.)
          e0 = EIRENE_sam_lorentz(fwhm,e00+shift)
          de = EIRENE_sam_vdwqs(dvdw,e0)
          e0=e0-de
@@ -1005,7 +1010,7 @@ c  default: sampling e0 and de=e00-e0 in energy (frequency) units
 c  lorentz plus quasistatic vanderWaals, no doppler, line cutoff
 c
 c  default: sampling e0 and de=e00-e0 in energy (frequency) units
-           e0 = EIRENE_sam_cutoff(ictoff,icell)
+           e0 = EIRENE_sam_cutoff(kk,ictoff,icell)
            res=e0
            nldoppl=.false.
          end if
@@ -1026,7 +1031,7 @@ c        res = hpcl/l0
 c        nldoppl=.true.
 
 c  default: sampling e0 and de=e00-e0 in energy (frequency) units
-         call EIRENE_lorvdwprof(icell,fwhm,shift,dvdw,.true.)
+         call EIRENE_lorvdwprof(kk,icell,fwhm,shift,dvdw,.true.)
          e0 = EIRENE_sam_lorentz(fwhm,e00+shift)
          de = EIRENE_sam_vdwqs(dvdw,e0)
          e0=e0-de
@@ -1053,7 +1058,7 @@ cdr      call dopplerprof(ipl2,icell,dnd,drft)
       case(8)
 c  lorentz + normal zeeman triplet, no doppler
          call EIRENE_zeeman_normalprof(icell,ctheta2,dbz)
-         call EIRENE_naturalprof(gam)
+         call eirene_naturalprof(kk,gam)
          dnd=0._dp
          drft=0._dp
          zep1 = EIRENE_sam_zeeman_normal(ctheta2,dbz,gam,dnd,drft,e00,2)
@@ -1063,7 +1068,7 @@ c  lorentz + normal zeeman triplet, no doppler
 c  lorentz + normal zeeman triplet, plus doppler
          call EIRENE_zeeman_normalprof(icell,ctheta2,dbz)
 cdr      call EIRENE_voigtprof(ipl2,icell,dnd,drft,gam)
-         call EIRENE_naturalprof(gam)
+         call eirene_naturalprof(kk,gam)
          dnd=0._dp
          drft=0._dp
          zep1 = EIRENE_sam_zeeman_normal(ctheta2,dbz,gam,dnd,drft,e00,2)
@@ -1156,7 +1161,7 @@ c        2: stim.em
      .    velx_b, vely_b, velz_b, velparm, vel_b
       external :: eirene_fisotr, eirene_fgauss, eirene_exit_own
 
-      if (idreac /= kk) call EIRENE_get_reaction(kk)
+c      if (idreac /= kk) call EIRENE_get_reaction(kk)
 
       select case(itypold)
       case(0)
@@ -1242,27 +1247,27 @@ c  this was originally for itypold=1,  now removed
             END IF
 
 c        sample new freq, doppler shift due n=2 velocity
-            e00=reaction%e0
-            e1=reaction%e1
+            e00=reacdat(kk)%phr%line%e0
+            e1=reacdat(kk)%phr%line%e1
             e2=e00+e1
 
-            labelp1: select case(reaction%iprofiletype)
+            labelp1: select case(reacdat(kk)%phr%line%iprofiletype)
             case(0)
                ee = e00
             case(1)
                ee = e00*(1.-cvel/clight)
             case(2)
-               call EIRENE_naturalprof(gam)
+               call eirene_naturalprof(kk,gam)
                zep1=EIRENE_sam_lorentz(gam,e00)
                ee = zep1
             case(3)
-               call EIRENE_naturalprof(gam)
+               call eirene_naturalprof(kk,gam)
                een = e00*(1.-cvel/clight)
                zep1=EIRENE_sam_lorentz(gam,een)
                ee = zep1
             case(4)
 c constants in wavelengths
-               call EIRENE_lorvdwprof(icell, fwhm,shift,dvdw,.false.)
+               call EIRENE_lorvdwprof(kk,icell, fwhm,shift,dvdw,.false.)
                l00 = hpcl/e00
                l0  = EIRENE_sam_lorentz(fwhm,shift+l00)
                dl  = EIRENE_sam_vdwqs(dvdw,1.e30_dp)
@@ -1270,7 +1275,7 @@ c constants in wavelengths
                ee = hpcl/l0
             case(5)
 c constants in wavelengths
-               call EIRENE_lorvdwprof(icell, fwhm,shift,dvdw,.false.)
+               call EIRENE_lorvdwprof(kk,icell, fwhm,shift,dvdw,.false.)
                l00 = hpcl/e00
                l0  = EIRENE_sam_lorentz(fwhm,shift+l00)
                dl  = EIRENE_sam_vdwqs(dvdw,1.e30_dp)
@@ -1279,7 +1284,7 @@ c constants in wavelengths
                ee  = ee*(1.-cvel/clight)
             case(6)
                call EIRENE_strkprof(icell,fwhm,shift)
-               call EIRENE_naturalprof(gam)
+               call eirene_naturalprof(kk,gam)
                gam=gam+fwhm
 
                e00s = e00+shift
@@ -1288,7 +1293,7 @@ c constants in wavelengths
                ee = zep1
             case(7)
                call EIRENE_strkprof(icell,fwhm,shift)
-               call EIRENE_naturalprof(gam)
+               call eirene_naturalprof(kk,gam)
                gam=gam+fwhm
 
                e00s = e00+shift
@@ -1493,7 +1498,7 @@ C  NATURAL LINE BROADENING = NATURALprof
 C  STARK FOR LYMAN ALPHA   = STRKprof
 C  NORMAL-ZEEMANN
 
-      SUBROUTINE EIRENE_LORVDWPROF(icell,fwhm,shift,dvdw,lscale)
+      SUBROUTINE EIRENE_LORVDWPROF(kk,icell,fwhm,shift,dvdw,lscale)
 !
 !  set parameters for convoluted Lorentz / vdWaals profile
 !
@@ -1502,7 +1507,7 @@ C  NORMAL-ZEEMANN
 !         lscale: false: output parameters in wavelength units, cm
 !
       implicit none
-      integer, intent(in) :: icell
+      integer, intent(in) :: kk,icell
       logical, intent(in) :: lscale
       real(dp),intent(out) :: fwhm,shift,dvdw
       integer :: ipl, ip, iplti
@@ -1513,8 +1518,8 @@ C  NORMAL-ZEEMANN
       shift=0.
       dvdw=0.
 
-      ipl=reaction%ignd
-      e00=reaction%e0
+      ipl=reacdat(kk)%phr%line%ignd
+      e00=reacdat(kk)%phr%line%e0
       l00=hpcl/e00
 
 c densities [m^-3], temperatures [eV]
@@ -1532,17 +1537,17 @@ c mass ipl
       cvel2a_m=cvel2a*1.E-2_dp
 
 !  FWHM, resonance broadening  [cm]
-      dlres= l00*l00*PIA/clight*reaction%c3*nipl
+      dlres= l00*l00*PIA/clight*reacdat(kk)%phr%line%c3*nipl
 !  FWHM, quadratic stark broadening [cm]
       dlst=(sqrt(8./PIA*te/pmasse)*cvel2a_m)**(1./3.)
       dlst=dlst*l00*l00/PI2A/clight*11.37*
-     .     reaction%c4**(2./3.)
+     .     reacdat(kk)%phr%line%c4**(2./3.)
       dlst=dlst*ne
 !  for vdW, impact and quasistatic approx.: sum over up to 10 foreign gas species
       dlvws = 0._dp
       dlqss = 0._dp
-      do ip=1,reaction%ifremd
-        ipl=reaction%iplsc6(ip)
+      do ip=1,reacdat(kk)%phr%line%ifremd
+        ipl=reacdat(kk)%phr%line%iplsc6(ip)
         if (ipl > 0) then
           iplti=mplsti(ipl)
           nipl=DIIN(ipl,icell)*1.e6_dp
@@ -1552,12 +1557,12 @@ c mass ipl
           dlvw=(sqrt(16._dp/PIA*tipl/mipl)*
      .          cvel2a_m)**(0.6_dp)
           dlvw=dlvw*l00*l00/PI2A/CLIGHT*8.08_dp
-     .         *reaction%c6a(ip)**(0.4_dp)
+     .         *reacdat(kk)%phr%line%c6a(ip)**(0.4_dp)
           dlvw=dlvw*nipl
           dlvws = dlvws + dlvw
 !  Parameter for vdWaals, quasi-static approximation [cm]
           dlqs = l00*l00/PI2A/clight*
-     .            (4._dp/3._dp*PIA)**2._dp*reaction%c6a(ip)
+     .            (4._dp/3._dp*PIA)**2._dp*reacdat(kk)%phr%line%c6a(ip)
           dlqs = dlqs * nipl*nipl
           dlqss = dlqss + dlqs
         end if
@@ -1583,21 +1588,21 @@ c dE / dlambda = -hc*lambda^-2 = -E^2/(hc)
       return
       end subroutine EIRENE_lorvdwprof
 
-      subroutine EIRENE_voigtprof(ipl,icell,dnd,drft,gam)
+      subroutine EIRENE_voigtprof(ipl,kk,icell,dnd,drft,gam)
 !  return gam, the FWHM of the Lorentz profile (natural broadening)
 !  return dnd, the doppler width (half width at 1/e maximum)
 !              dnd/sqrt(2) is the std. deviation of a gaussian
 !  return drft, the line shift due to the drift motion in the maxwellian
       implicit none
-      integer, intent(in) :: ipl,icell
+      integer, intent(in) :: ipl,kk,icell
       real(dp), intent(out) :: dnd,drft,gam
 
-      call EIRENE_dopplerprof(ipl,icell,dnd,drft)
-      call EIRENE_naturalprof(gam)
+      call EIRENE_dopplerprof(ipl,kk,icell,dnd,drft)
+      call eirene_naturalprof(kk,gam)
       return
       end subroutine EIRENE_voigtprof
 
-      subroutine EIRENE_DOPPLERPROF(iipl,icell,dnd,drft)
+      subroutine EIRENE_DOPPLERPROF(iipl,kk,icell,dnd,drft)
 !  returns the doppler width dnd of a doppler broadened line profile
 !     and the shift drft due to a drift in the maxwellian
 !  use energy units, eV
@@ -1610,15 +1615,20 @@ c dE / dlambda = -hc*lambda^-2 = -E^2/(hc)
 !  drft= E00* (VEC_V_PHOTON * VEC_V_DRIFT)/CLIGHT^2
 !
       implicit none
-      integer, intent(in) :: iipl,icell
+      integer, intent(in) :: iipl,kk,icell
       real(dp), intent(out) :: dnd,drft
       real(dp) :: e00,t
       integer :: ipl,iplti,iplv
 
       ipl=iipl
-      e00=reaction%e0
+      e00=reacdat(kk)%phr%line%e0
       iplti=mplsti(ipl)
       t=tiin(iplti,icell)
+      if (t .le. 0.0) then
+        write (iunout,*) 'zero temp. encountered in dopplerprof.'
+        write (iunout,*) 'ipl, t ',ipl,t
+        call eirene_exit_own(1)
+      endif
       dnd=e00*sqrt(t)*rsqdvp(ipl)/clight
       drft=0._dp
       if (nldrft) then
@@ -1630,17 +1640,18 @@ c dE / dlambda = -hc*lambda^-2 = -E^2/(hc)
       return
       end subroutine EIRENE_DOPPLERPROF
 
-      subroutine EIRENE_NATURALPROF(gam)
+      subroutine EIRENE_NATURALPROF(kk,gam)
 !  this routines returnes the FWHM parameter (gam)
 !  for the Lorentzian Natural line broadening profile
 !  still to be done: add other Aik's from upper and lower level of line
 !  still to be done: precomputation of scaling factors
       IMPLICIT NONE
+      integer, intent(in) :: kk
       real(dp), intent(out) :: gam
 
       gam=0.
 c  NATURAL LINE BROADENING, Radians/s
-      gam=gam+reaction%aik
+      gam=gam+reacdat(kk)%phr%line%aik
 c  convert to frequency (Hz), and then to energy, eV
       gam=gam*hplnk_bar
       return
@@ -1966,14 +1977,17 @@ c  vdwqs                        (Reiter)
 
       sig=dnd/sqrt(2._dp)
 c  now sample from a gaussian with standard deviation sig
+cdr  1st step: uniform on a unit circle, by rejection
       do
          v1=2.*RANF_EIRENE()-1.
          v2=2.*RANF_EIRENE()-1.
          s=v1*v1+v2*v2
          if(s < 1.) exit
       enddo
+cdr  2nd step: convert to standard gaussian
       ar=log(s)
       f1=v1*sqrt(-(ar+ar)/s)*sig
+cdr  we could save this v2, ar, and s, for next call 
 c     f2=v2*sqrt(-(ar+ar)/s)*sig
       res=f1+drft+e00
       return
@@ -2793,854 +2807,13 @@ c.....
 
 c EIRENE utilities:
 
-
-
-      SUBROUTINE EIRENE_PH_ALLOC_XSECTPH(nnrot)
-c  some parameters for PH processes are already in COMXS
-c  and arrays are allocated there. Some remain here. still needs
-c  clean-up.
-c  nnrot  == nrph !! because no more PH processes in XSECTA
-
-      IMPLICIT NONE
-      integer, intent(in) :: nnrot
-c allocate
-      if(nnrot > 0) then
-         if (.not.allocated(PHV_LGPHOT))
-     .     allocate(PHV_LGPHOT(0:nphot,0:nnrot,0:5))
-         phv_lgphot=0
-      else
-         if (.not.allocated(PHV_LGPHOT))
-     .     allocate(PHV_LGPHOT(0:nphot,0:0,0:5))
-         phv_lgphot=0
-      endif
-      if (.not.allocated(PHV_NPHOTI))
-     .  allocate(phv_nphoti(nphot))
-      phv_nphoti=0
-      if(.not.allocated(phv_iestotph)) then
-         allocate(phv_iestotph(0:nphot,nnrot,3))
-         phv_iestotph=0
-      endif
-      if(.not.allocated(phv_n1stotph)) then
-         allocate(phv_n1stotph(0:nphot,nnrot,3))
-         allocate(phv_n2ndotph(0:nphot,nnrot,3))
-         phv_n1stotph=0
-         phv_n2ndotph=0
-      endif
-      return
-      END SUBROUTINE EIRENE_PH_ALLOC_XSECTPH
-
-
-
-      SUBROUTINE EIRENE_PH_XSECTPH(ipht,nrc,idsc)
-      IMPLICIT NONE
-      integer, intent(in) :: ipht,nrc,idsc
-      integer :: kk,ipl0,ipl1,ipl2,ityp0,ityp1,ityp2,
-     .    ifnd,mode,updf,nseot4,ierr,ipl0ti
-      real(dp) :: factkk, ebulk
-      external :: eirene_exit_own, eirene_leer
-
-      kk=ireacph(ipht,nrc)
-      factkk=freacph(ipht,nrc)
-      if(factkk == 0.) factkk=1.
-
-      IPL0 =eirene_IDEZ(IBULKPH(ipht,nrc),3,3)
-      IPL1 =eirene_IDEZ(ISCD1PH(ipht,nrc),3,3)
-      IPL2 =eirene_IDEZ(ISCD2PH(ipht,nrc),3,3)
-      ITYP0=eirene_IDEZ(IBULKPH(ipht,nrc),1,3)
-      ITYP1=eirene_IDEZ(ISCD1PH(ipht,nrc),1,3)
-      ITYP2=eirene_IDEZ(ISCD2PH(ipht,nrc),1,3)
-
-c collect niveau information data, N0, N1, N2
-cdr besser: anstatt dessen ein einziges E00 als funktion von KK
-
-      updf=1
-      mode=0
-      ifnd=999
-
-      PHV_LGPHOT(ipht,idsc,0)=idsc
-      PHV_LGPHOT(ipht,idsc,1)=ipl0
-      PHV_LGPHOT(ipht,idsc,2)=ifnd
-      PHV_LGPHOT(ipht,idsc,3)=kk
-      PHV_LGPHOT(ipht,idsc,4)=updf
-      PHV_LGPHOT(ipht,idsc,5)=mode
-
-CDR  1ST SECONDARY
-      PHV_N1STOTph(ipht,idsc,1) = ityp1
-      PHV_N1STOTph(ipht,idsc,2) = ipl1
-      PHV_N1STOTph(ipht,idsc,3) = 0
-      IF (ityp1 < 4)
-     .  PHV_N1STOTph(ipht,idsc,3) = eirene_IDEZ(ISCD1PH(ipht,nrc),2,3)
-CDR  2ND SECONDARY
-      PHV_N2NDOTph(ipht,idsc,1) = ityp2
-      PHV_N2NDOTph(ipht,idsc,2) = ipl2
-      PHV_N2NDOTph(ipht,idsc,3) = 0
-      IF (ityp2 < 4)
-     .  PHV_N2NDOTph(ipht,idsc,3) = eirene_IDEZ(ISCD2PH(ipht,nrc),2,3)
-
-cdr  CROSS-SECTION: HERE: BEAM-BEAM, NO DOPPLER FROM THERMAL MOTION
-      MODCOL(7,1,IDSC)=KK
-cdr  COLLISION MODEL 4: BEAM-BEAM
-      MODCOL(7,2,IDSC)=4
-c
-C
-C  3. BULK ION MOMENTUM LOSS RATE
-C
-C
-C  4. BULK ION ENERGY LOSS RATE
-C
-cdr   NSEOT4=eirene_IDEZ(ISCDE,4,5)
-cdr bulk energy loss not ready
-      nseot4=0
-      ebulk=0.
-cdr
-      IF (NSEOT4.EQ.0) THEN
-C  4.A)  ENERGY LOSS RATE OF IMP. BULK ION = CONST.*RATE COEFF.
-C        SAMPLE COLLIDING ION FROM DRIFTING MONOENERGETIC ISOTROPIC DISTRIBUTION
-        write (iunout,*) ' in ph_xsectph, nseot4=0 '
-        IF (EBULK.LE.0.D0) THEN
-          write (iunout,*) ' in ph_xsectph, nseot4=0, ebulk <= 0 '
-          IF (NSTORDR >= NRAD) THEN
-            write (iunout,*) ' in ph_xsectph, nstordr>nrad ',idsc
-            IPL0TI=MPLSTI(IPL0)
-            EPLPH3(Idsc,1:NSBOX,1)=1.5*TIIN(IPL0TI,1:NSBOX)
-            IF (LEDRIFT) EPLPH3(Idsc,1:NSBOX,1)=
-     .                   EPLPH3(Idsc,1:NSBOX,1)+EDRIFT(IPL0,1:NSBOX)
-            NELRPH(Idsc) = -3
-          ELSE
-            write (iunout,*) ' in ph_xsectph, nstordr<nrad '
-            NELRPH(Idsc) = -3
-          END IF
-        ELSE
-          write (iunout,*) ' in ph_xsectph, nseot4=0, ebulk > 0 '
-          IF (NSTORDR >= NRAD) THEN
-            write (iunout,*) ' in ph_xsectph, nstordr>nrad '
-            EPLPH3(Idsc,1:NSBOX,1)=EBULK
-            IF (LEDRIFT) EPLPH3(Idsc,1:NSBOX,1)=
-     .                   EPLPH3(Idsc,1:NSBOX,1)+EDRIFT(IPL0,1:NSBOX)
-            NELRPH(Idsc) = -2
-          ELSE
-            NELRPH(Idsc) = -2
-            EPLPH3(Idsc,1,1)=EBULK
-            write (iunout,*) ' in ph_xsectph, nstordr<nrad '
-          END IF
-        ENDIF
-        MODCOL(7,4,IDSC)=3
-        write (iunout,*) ' in ph_xsectph, Modcol(7,4,1,1) ',
-     .                MODCOL(7,4,IDSC)
-      ELSEIF (NSEOT4.EQ.1) THEN
-C  4.B) ENERGY LOSS RATE OF IMP. ION = 1.5*TI* RATE COEFF.
-C       SAMPLE COLLIDING ION FROM DRIFTING MAXWELLIAN
-        write (iunout,*) ' in ph_xsectph, nseot4=1 '
-        IF (EBULK.LE.0.D0) THEN
-          IF (NSTORDR >= NRAD) THEN
-            IPL0TI=MPLSTI(IPL0)
-            EPLPH3(Idsc,1:NSBOX,1)=1.5*TIIN(IPL0TI,1:NSBOX)
-            IF (LEDRIFT) EPLPH3(Idsc,1:NSBOX,1)=
-     .                   EPLPH3(Idsc,1:NSBOX,1)+EDRIFT(IPL0,1:NSBOX)
-            NELRPH(Idsc) = -3
-          ELSE
-            NELRPH(Idsc) = -3
-          END IF
-        ELSE
-          WRITE (iunout,*) 'WARNING FROM SUBR. xsectph '
-          WRITE (iunout,*) 'MODIFIED TREATMENT OF photon collision '
-          WRITE (iunout,*) 'SAMPLE FROM MAXWELLIAN WITH T = ',EBULK/1.5
-          WRITE (iunout,*) 'RATHER THAN WITH T = TIIN '
-          CALL EIRENE_LEER(1)
-          IF (NSTORDR >= NRAD) THEN
-            EPLPH3(Idsc,1:NSBOX,1)=EBULK
-            IF (LEDRIFT) EPLPH3(Idsc,1:NSBOX,1)=
-     .                   EPLPH3(Idsc,1:NSBOX,1)+EDRIFT(IPL0,1:NSBOX)
-            NELRPH(Idsc) = -2
-          ELSE
-            NELRPH(Idsc) = -2
-            EPLPH3(Idsc,1,1)=EBULK
-          END IF
-        ENDIF
-        MODCOL(7,4,IDSC)=1
-C     ELSEIF (NSECX4.EQ.2) THEN
-C  use i-integral expressions. to be written
-c     ELSEIF (NSECX4.EQ.3) THEN
-C  4.B)  ENERGY LOSS RATE OF IMP. ION = EN.-WEIGHTED RATE
-C  4.C)  ENERGY LOSS RATE OF IMP. ION = EN.-WEIGHTED RATE
-      ELSE
-        IERR=5
-        GOTO 996
-      ENDIF
-
-C  ESTIMATOR FOR CONTRIBUTION TO COLLISION RATES FROM THIS REACTION
-
-      PHV_IESTOTph(ipht,idsc,1) = eirene_IDEZ(IESTMPH(IPHT,idsc),1,3)
-      PHV_IESTOTph(ipht,idsc,2) = eirene_IDEZ(IESTMPH(IPHT,idsc),2,3)
-      PHV_IESTOTph(ipht,idsc,3) = eirene_IDEZ(IESTMPH(IPHT,idsc),3,3)
-C
-cdr  not ready
-c
-c     ITYP1=N1STX(IRCX,1)
-c     ITYP2=N2NDX(IRCX,1)
-c     IF (IESTCX(IRCX,1).NE.0.AND.(ITYP1.NE.1.OR.ITYP2.NE.4)) THEN
-c       WRITE (iunout,*) 'WARNING: COLL.EST NOT AVAILABLE FOR PART. BALANCE '
-c       WRITE (iunout,*) 'IRCX = ',IRCX
-c       WRITE (iunout,*) 'AUTOMATICALLY RESET TO TRACKLENGTH ESTIMATOR '
-c       CALL EIRENE_LEER(1)
-c       IESTCX(IRCX,1)=0
-c     ENDIF
-c     IF (IESTCX(IRCX,2).NE.0.AND.(ITYP1.NE.1.OR.ITYP2.NE.4)) THEN
-c       WRITE (iunout,*) 'WARNING: COLL.EST NOT AVAILABLE FOR MOM. BALANCE '
-c       WRITE (iunout,*) 'IRCX = ',IRCX
-c       WRITE (iunout,*) 'AUTOMATICALLY RESET TO TRACKLENGTH ESTIMATOR '
-c       CALL EIRENE_LEER(1)
-c       IESTCX(IRCX,2)=0
-c     ENDIF
-c     IF (IESTCX(IRCX,3).NE.0.AND.(ITYP1.NE.1.OR.ITYP2.NE.4)) THEN
-c       WRITE (iunout,*) 'WARNING: COLL.EST NOT AVAILABLE FOR EN. BALANCE '
-c       WRITE (iunout,*) 'IRCX = ',IRCX
-c       WRITE (iunout,*) 'AUTOMATICALLY RESET TO TRACKLENGTH ESTIMATOR '
-c       CALL EIRENE_LEER(1)
-c       IESTCX(IRCX,3)=0
-c     ENDIF
-      return
-  996 CONTINUE
-      WRITE (iunout,*) 'ERROR IN XSectph: EXIT CALLED'
-      WRITE (iunout,*) 'NO CROSS-SECTION AVAILABLE FOR NON-DEFAULT OT'
-      WRITE (iunout,*) 'KK,IPHT,IPL0 ',KK,IPHT,IPL0
-      WRITE (iunout,*) 'EITHER PROVIDE CROSS-SECTION OR USE DIFFERENT'
-      WRITE (iunout,*) 'POST-COLLISION SAMPLING FLAG ISCDEA'
-      CALL EIRENE_EXIT_OWN(1)
-      RETURN
-      END SUBROUTINE EIRENE_PH_XSECTPH
-C
-C     SUBROUTINE EIRENE_XSTPH_2(Idsc,IPL)
-C     IMPLICIT NONE
-C     integer, intent(in) :: idsc,ipl
-C
-c     CALL EIRENE_LEER(1)
-c     WRITE (iunout,*) 'Photon REACTION NO. Idsc= ',Idsc
-c     CALL EIRENE_LEER(1)
-c     WRITE (iunout,*) 'Collision WITH BULK IONS IPLS:'
-c     WRITE (iunout,*) '1ST AND 2ND NEXT GEN. SPECIES I2ND1, I2ND2:'
-c     ITYP1=N1STX(IRCX,1)
-c     ITYP2=N2NDX(IRCX,1)
-c     ISPZ1=N1STX(IRCX,2)
-c     ISPZ2=N2NDX(IRCX,2)
-c     IF (ITYP1.EQ.1) TEXTS1=TEXTS(NSPH+ISPZ1)
-c     IF (ITYP1.EQ.2) TEXTS1=TEXTS(NSPA+ISPZ1)
-c     IF (ITYP1.EQ.3) TEXTS1=TEXTS(NSPAM+ISPZ1)
-c     IF (ITYP1.EQ.4) TEXTS1=TEXTS(NSPAMI+ISPZ1)
-c     IF (ITYP2.EQ.1) TEXTS2=TEXTS(NSPH+ISPZ2)
-c     IF (ITYP2.EQ.2) TEXTS2=TEXTS(NSPA+ISPZ2)
-c     IF (ITYP2.EQ.3) TEXTS2=TEXTS(NSPAM+ISPZ2)
-c     IF (ITYP2.EQ.4) TEXTS2=TEXTS(NSPAMI+ISPZ2)
-c     WRITE (iunout,*) 'IPLS= ',TEXTS(NSPAMI+IPL),'I2ND1= ',TEXTS1,
-c    .                    'I2ND2= ',TEXTS2
-c     CALL EIRENE_LEER(1)
-C     RETURN
-C
-C     END SUBROUTINE EIRENE_XSTPH_2
-
 c
 c  experimental routine for black body removal
 c
 
 
-      subroutine EIRENE_line_cutoff
-      IMPLICIT NONE
-      real(dp), allocatable :: ete(:), en0(:), floc(:), en0log(:),
-     .                         eminus(:), eplus(:),
-     .                         xintminus(:), xintplus(:),
-     .                         eintminus(:), eintplus(:)
-      real(dp), allocatable :: tab_emax(:,:), tab_lor(:,:),
-     .                         tab_zmfp(:,:), fint_emax(:,:),
-     .                         tab_eminus(:,:,:), tab_eplus(:,:,:),
-     .                         fint_eminus(:,:,:), fint_eplus(:,:,:),
-     .                         fint_inf(:,:),
-     .                         eint_eminus(:,:,:), eint_eplus(:,:,:),
-     .                         exint_inf(:,:), eint_emax(:,:)
-      real(dp) :: gtot, g1, g2, g3, g4, en0del, etedel, te, di,
-     .            emax, xlor, zmfp_cut, zmfp_center, fac_cut, dilog,
-     .            xintmax, xxl, xxr, elrj, errj, l0right, e00, lrj,
-     .            fwhm, shift, dvdw, xx, xintinf, l0,
-     .            eintmax, eintinf
-      integer :: istr, mxrec, ite, iloc, iirc, irrc, kk,
-     .           ipl, iplsi, icell, ire, ibulk, lr, in0, jloc,
-     .           iccnt, mxrjprt, irj, ios
-      integer :: nte, nn0, nloc
-      integer :: nte_old=0, nn0_old=0, nloc_old=0
-      logical :: found
-      character(60) :: filnam
-
-      if (allocated(lsrcpls)) return
-
-      allocate (lsrcpls(nplsi))
-      LSRCPLS = .FALSE.
-      DO ISTR=1,NSTRAI
-        IF (NLPLS(ISTR) .AND. (NPTS(ISTR) > 0)
-     .      .AND. (FLUX(ISTR) > 0._DP)) THEN
-          IPLS = NSPEZ(ISTR)
-          IF (IPLS.LE.0.OR.IPLS.GT.NPLSI) THEN
-            LSRCPLS = .TRUE.
-          ELSE
-            LSRCPLS(IPLS) = .TRUE.
-          END IF
-        END IF
-      END DO
-
-      MXREC = 0
-      mxrjprt = 1
-      do iplsi = 1, nplsi
-
-        ipls = iplsi
-        if (.not.lsrcpls(ipls)) cycle
-        if (lgprc(ipls,0) == 0) cycle
-
-        do iirc = 1, nprci(ipls )
-          irrc = lgprc(ipls,iirc)
-          kk = nrearc(irrc)
-          if (.not.reacdat(kk)%lphr) cycle
-          call EIRENE_get_reaction(kk)
-          if (reaction%iprofiletype /= 4) cycle
-          MXREC = MXREC + 1
-          mxrjprt = max(mxrjprt,reaction%nrjprt)
-        end do
-      end do
-
-!PB      allocate (nreact(nreac))
-!PB      nreact = 0
-
-      IF (MXREC == 0) return
-
-      allocate (ecutleft(mxrec,nrad))
-      allocate (ecutright(mxrec,nrad))
-      allocate (phicut(mxrec,nrad))
-      allocate (phi_zero(mxrec,nrad))
-      allocate (phi_inf(mxrec,nrad))
-      allocate (xintleft(mxrec,nrad))
-      allocate (xintright(mxrec,nrad))
-      allocate (xint_inf(mxrec,nrad))
-      allocate (xint_cut(mxrec,nrad))
-      allocate (eintleft(mxrec,nrad))
-      allocate (eintright(mxrec,nrad))
-      allocate (eint_inf(mxrec,nrad))
-
-      nreact = 0
-      ecutleft = huge(1._dp)
-      ecutright = eps10
-      phicut = 0._dp
-      phi_zero = 0._dp
-      phi_inf = 0._dp
-      xintleft = 1._dp
-      xintright = 1._dp
-      xint_inf = 1._dp
-      xint_cut = 0._dp
-      eintleft = huge(1._dp)
-      eintright = huge(1._dp)
-      eint_inf = huge(1._dp)
-
-      if (mxrjprt .gt. 1) then
-        allocate (phi_rj_left(mxrec,mxrjprt-1,nrad))
-        allocate (phi_rj_right(mxrec,mxrjprt-1,nrad))
-        phi_rj_left = 0._dp
-        phi_rj_right = 0._dp
-      end if
-
-      iccnt = 0
-      do iplsi = 1, nplsi
-
-        ipls = iplsi
-        if (.not.lsrcpls(ipls)) cycle
-        if (lgprc(ipls,0) == 0) cycle
-
-        do iirc = 1, nprci(ipls )
-          irrc = lgprc(ipls,iirc)
-          kk = nrearc(irrc)
-          call EIRENE_get_reaction(kk)
-          if (reaction%iprofiletype/= 4) cycle
-
-! IPHOT may not be allocated here
-          IPHOT=NPHPRC(IRRC)
-          if (nplprc(irrc) > 0) ibulk=nplprc(irrc)
-          if (nplprc_2(irrc) > 0) ibulk=nplprc_2(irrc)
-          found=.false.
-          do ire=1,phv_nphoti(iphot)
-            if (phv_lgphot(iphot,ire,1) .ne. ibulk) cycle
-! first secondary is bulk particle
-            if (phv_n1stotph(iphot,ire,1) == 4) then
-              if (phv_n1stotph(iphot,ire,2) == ipls) then
-                found = .true.
-                exit
-              end if
-            end if
-! second secondary is bulk particle
-            if (phv_n2ndotph(iphot,ire,1) == 4) then
-              if (phv_n2ndotph(iphot,ire,2) == ipls) then
-                found = .true.
-                exit
-              end if
-            end if
-          end do  ! ire
-
-          if (.not.found) then
-            write (iunout,*) ' no self-absorption for ipls, irrc ',
-     .                                                ipls, irrc
-            write (iunout,*) ' no cutoff for this line '
-            cycle
-          end if
-
-! line with self-absorption found
-
-          iccnt = iccnt + 1
-          nreact(kk) = iccnt
-
-! read tables for the line
-
-          filnam = reaction%reacname
-          lr = len_trim(filnam)
-          filnam(lr+1:lr+6) = '.table'
-          open (unit=39,file=filnam,status='OLD',iostat=ios)
-          if (ios .ne. 0) then
-            write (iunout,*) ' no table found for ',reaction%reacname
-            write (iunout,*) ' no cutoff for this line '
-            cycle
-          end if
-
-          read (39,*) nte, nn0, nloc
-
-          if ((nte .ne. nte_old) .or. (nn0 .ne. nn0_old) .or.
-     .        (nloc .ne. nloc_old)) then
-
-            if (allocated(ete)) then
-               deallocate (ete)
-               deallocate (en0)
-               deallocate (en0log)
-               deallocate (floc)
-               deallocate (eminus)
-               deallocate (eplus)
-               deallocate (xintminus)
-               deallocate (xintplus)
-               deallocate (tab_emax)
-               deallocate (tab_lor)
-               deallocate (tab_zmfp)
-               deallocate (tab_eminus)
-               deallocate (tab_eplus)
-               deallocate (fint_emax)
-               deallocate (fint_eminus)
-               deallocate (fint_eplus)
-               deallocate (fint_inf)
-               deallocate (eint_emax)
-               deallocate (eint_eminus)
-               deallocate (eint_eplus)
-               deallocate (exint_inf)
-            end if
-
-            allocate (ete(nte))
-            allocate (en0(nn0))
-            allocate (en0log(nn0))
-            allocate (floc(nloc))
-            allocate (eminus(nloc))
-            allocate (eplus(nloc))
-            allocate (xintminus(nloc))
-            allocate (xintplus(nloc))
-            allocate (eintminus(nloc))
-            allocate (eintplus(nloc))
-            allocate (tab_emax(nte,nn0))
-            allocate (tab_lor(nte,nn0))
-            allocate (tab_zmfp(nte,nn0))
-            allocate (tab_eminus(nte,nn0,nloc))
-            allocate (tab_eplus(nte,nn0,nloc))
-            allocate (fint_emax(nte,nn0))
-            allocate (fint_inf(nte,nn0))
-            allocate (fint_eminus(nte,nn0,nloc))
-            allocate (fint_eplus(nte,nn0,nloc))
-            allocate (eint_emax(nte,nn0))
-            allocate (exint_inf(nte,nn0))
-            allocate (eint_eminus(nte,nn0,nloc))
-            allocate (eint_eplus(nte,nn0,nloc))
-
-            nte_old = nte
-            nn0_old = nn0
-            nloc_old = nloc
-          end if
-
-          read (39,*) ete(1:nte)
-          read (39,*) en0(1:nn0)
-          read (39,*) floc(1:nloc)
-
-          do ite=1,nte
-             read (39,*) tab_emax(ite,1:nn0)
-          end do
-
-          do ite=1,nte
-             read (39,*) tab_lor(ite,1:nn0)
-          end do
-
-          do ite=1,nte
-             read (39,*) tab_zmfp(ite,1:nn0)
-          end do
-
-          do ite=1,nte
-             read (39,*) fint_emax(ite,1:nn0)
-          end do
-
-          do ite=1,nte
-             read (39,*) eint_emax(ite,1:nn0)
-          end do
-
-          do ite=1,nte
-             read (39,*) fint_inf(ite,1:nn0)
-          end do
-
-          do ite=1,nte
-             read (39,*) exint_inf(ite,1:nn0)
-          end do
-
-          do iloc=1, nloc
-             do ite=1,nte
-                read (39,*) tab_eminus(ite,1:nn0,iloc)
-             end do
-          end do
-
-          do iloc=1, nloc
-             do ite=1,nte
-                read (39,*) tab_eplus(ite,1:nn0,iloc)
-             end do
-          end do
-
-          do iloc=1, nloc
-             do ite=1,nte
-                read (39,*) fint_eminus(ite,1:nn0,iloc)
-             end do
-          end do
-
-          do iloc=1, nloc
-             do ite=1,nte
-                read (39,*) fint_eplus(ite,1:nn0,iloc)
-             end do
-          end do
-
-          do iloc=1, nloc
-             do ite=1,nte
-                read (39,*) eint_eminus(ite,1:nn0,iloc)
-             end do
-          end do
-
-          do iloc=1, nloc
-             do ite=1,nte
-                read (39,*) eint_eplus(ite,1:nn0,iloc)
-             end do
-          end do
-
-          close (unit=39)
-
-! n0 in #/cm**3
-          en0 = en0*1.e-6_dp
-          en0log = log10(en0)
-          en0del = en0log(2)-en0log(1)
-
-          etedel = ete(2)-ete(1)
-
-
-          do icell=1,nsbox
-
-            ipl = reaction%ignd
-            te = tein(icell)
-            di = diin(ipl,icell)
-            dilog = log10(di)
-
-            if ((te < ete(1)) .or. (te > ete(nte))) then
-               write (iunout,*) ' no cutoff in cell ', icell,
-     .                          ' because:'
-               write (iunout,*) ' te out of energy interval for ',
-     .                          ' reaction ', reaction%reacname
-               write (iunout,*) ' tein(icell) ',te
-               write (iunout,*) ' ete(1) ',ete(1)
-               write (iunout,*) ' ete(nte) ',ete(nte)
-               write (iunout,*) ' please recalculate table ',filnam
-               cycle
-            end if
-
-            if ((di < en0(1)) .or. (di > en0(nn0))) then
-               write (iunout,*) ' no cutoff in cell ', icell,
-     .                          ' because:'
-               write (iunout,*) ' density out of interval for ',
-     .                          ' reaction ', reaction%reacname
-               write (iunout,*) ' diin(ipls,icell) ',di
-               write (iunout,*) ' en0(1) ',en0(1)
-               write (iunout,*) ' en0(nn0) ',en0(nn0)
-               write (iunout,*) ' please recalculate table ',filnam
-               cycle
-            end if
-
-            ite = min(int((te-ete(1))/etedel + 1),nte-1)
-            in0 = min(int((log10(di)-en0log(1))/en0del + 1), nn0-1)
-
-!            gtot = abs(ete(ite)-ete(ite+1)) *
-!     .             abs(en0log(in0) - en0log(in0+1))
-
-            gtot = abs(ete(ite)-ete(ite+1)) *
-     .             abs(en0(in0) - en0(in0+1))
-
-!            g1 = abs(ete(ite)-te) * abs(en0log(in0)-dilog)
-!            g2 = abs(ete(ite+1)-te) * abs(en0log(in0)-dilog)
-!            g3 = abs(ete(ite+1)-te) * abs(en0log(in0+1)-dilog)
-!            g4 = abs(ete(ite)-te) * abs(en0log(in0+1)-dilog)
-
-!            g1 = abs(te-ete(ite)) * abs(dilog-en0log(in0))
-!            g2 = abs(ete(ite+1)-te) * abs(dilog-en0log(in0))
-!            g3 = abs(ete(ite+1)-te) * abs(en0log(in0+1)-dilog)
-!            g4 = abs(te-ete(ite)) * abs(en0log(in0+1)-dilog)
-
-            g1 = abs(te-ete(ite)) * abs(di-en0(in0))
-            g2 = abs(ete(ite+1)-te) * abs(di-en0(in0))
-            g3 = abs(ete(ite+1)-te) * abs(en0(in0+1)-di)
-            g4 = abs(te-ete(ite)) * abs(en0(in0+1)-di)
-
-            emax = (g3*tab_emax(ite,in0) + g4*tab_emax(ite+1,in0) +
-     .              g1*tab_emax(ite+1,in0+1) + g2*tab_emax(ite,in0+1)) /
-     .              gtot
-
-            xlor = (g3*tab_lor(ite,in0) + g4*tab_lor(ite+1,in0) +
-     .              g1*tab_lor(ite+1,in0+1) + g2*tab_lor(ite,in0+1)) /
-     .              gtot
-
-            xintmax = (g3*fint_emax(ite,in0) +
-     .                 g4*fint_emax(ite+1,in0) +
-     .                 g1*fint_emax(ite+1,in0+1) +
-     .                 g2*fint_emax(ite,in0+1)) / gtot
-
-            eintmax = (g3*eint_emax(ite,in0) +
-     .                 g4*eint_emax(ite+1,in0) +
-     .                 g1*eint_emax(ite+1,in0+1) +
-     .                 g2*eint_emax(ite,in0+1)) / gtot
-
-            xintinf = (g3*fint_inf(ite,in0) +
-     .                 g4*fint_inf(ite+1,in0) +
-     .                 g1*fint_inf(ite+1,in0+1) +
-     .                 g2*fint_inf(ite,in0+1)) / gtot
-
-            eintinf = (g3*exint_inf(ite,in0) +
-     .                 g4*exint_inf(ite+1,in0) +
-     .                 g1*exint_inf(ite+1,in0+1) +
-     .                 g2*exint_inf(ite,in0+1)) / gtot
-
-            do iloc = 1,nloc
-
-              eminus(iloc) = (g3*tab_eminus(ite,in0,iloc) +
-     .                        g4*tab_eminus(ite+1,in0,iloc) +
-     .                        g1*tab_eminus(ite+1,in0+1,iloc) +
-     .                        g2*tab_eminus(ite,in0+1,iloc) ) / gtot
-
-              eplus(iloc) = (g3*tab_eplus(ite,in0,iloc) +
-     .                       g4*tab_eplus(ite+1,in0,iloc) +
-     .                       g1*tab_eplus(ite+1,in0+1,iloc) +
-     .                       g2*tab_eplus(ite,in0+1,iloc) ) / gtot
-
-              xintminus(iloc) = (g3*fint_eminus(ite,in0,iloc) +
-     .                           g4*fint_eminus(ite+1,in0,iloc) +
-     .                           g1*fint_eminus(ite+1,in0+1,iloc) +
-     .                           g2*fint_eminus(ite,in0+1,iloc) ) / gtot
-
-              xintplus(iloc) = (g3*fint_eplus(ite,in0,iloc) +
-     .                          g4*fint_eplus(ite+1,in0,iloc) +
-     .                          g1*fint_eplus(ite+1,in0+1,iloc) +
-     .                          g2*fint_eplus(ite,in0+1,iloc) ) / gtot
-
-              eintminus(iloc) = (g3*eint_eminus(ite,in0,iloc) +
-     .                           g4*eint_eminus(ite+1,in0,iloc) +
-     .                           g1*eint_eminus(ite+1,in0+1,iloc) +
-     .                           g2*eint_eminus(ite,in0+1,iloc) ) / gtot
-
-              eintplus(iloc) = (g3*eint_eplus(ite,in0,iloc) +
-     .                          g4*eint_eplus(ite+1,in0,iloc) +
-     .                          g1*eint_eplus(ite+1,in0+1,iloc) +
-     .                          g2*eint_eplus(ite,in0+1,iloc) ) / gtot
-
-            end do
-
-            zmfp_center = (g3*tab_zmfp(ite,in0) + g4*tab_zmfp(ite+1,in0)
-     .            + g1*tab_zmfp(ite+1,in0+1) + g2*tab_zmfp(ite,in0+1)) /
-     .              gtot
-
-            zmfp_cut = TDGTEMX*celdia(icell)
-
-            if ( zmfp_center < zmfp_cut) then
-
-! mean free path at line center is smaller than the reference value
-! compute cut-offs
-
-               fac_cut = zmfp_center / zmfp_cut
-
-               jloc = nloc+1
-               do iloc = 1, nloc
-                  if (fac_cut > floc(iloc)) then
-                     jloc = iloc
-                     exit
-                  end if
-               end do
-
-!pb               fac_cut=floc(min(jloc,nloc))
-
-               if (jloc == 1) then
-
-                 ecutleft(iccnt,icell) = emax -
-     .                   (1._dp-fac_cut) / (1._dp - floc(1)) *
-     .                   (emax - eminus(1))
-                 ecutright(iccnt,icell) = emax +
-     .                   (1._dp-fac_cut) / (1._dp - floc(1)) *
-     .                   (eplus(1) - emax)
-!                 xintleft(iccnt,icell) = xintminus(1) +
-!     .                   (fac_cut-floc(1)) / (1._dp - floc(1)) *
-!     .                   (xintmax - xintminus(1))
-!                 xintright(iccnt,icell) = xintmax +
-!     .                   (1._dp-fac_cut) / (1._dp - floc(1)) *
-!     .                   (xintplus(1) - xintmax)
-                 xintleft(iccnt,icell) = xintminus(1) +
-     .                   (ecutleft(iccnt,icell)-eminus(1)) /
-     .                   (emax - eminus(1)) *
-     .                   (xintmax - xintminus(1))
-                 xintright(iccnt,icell) = xintmax +
-     .                   (ecutright(iccnt,icell)-emax) /
-     .                   (eplus(1) - emax) *
-     .                   (xintplus(1) - xintmax)
-                 eintleft(iccnt,icell) = eintminus(1) +
-     .                   (ecutleft(iccnt,icell)-eminus(1)) /
-     .                   (emax - eminus(1)) *
-     .                   (eintmax - eintminus(1))
-                 eintright(iccnt,icell) = eintmax +
-     .                   (ecutright(iccnt,icell)-emax) /
-     .                   (eplus(1) - emax) *
-     .                   (eintplus(1) - eintmax)
-                 phicut(iccnt,icell) = fac_cut * xlor
-
-               else if ( jloc > nloc) then
-
-                 ecutleft(iccnt,icell) = eminus(nloc)
-                 ecutright(iccnt,icell) = eplus(nloc)
-                 xintleft(iccnt,icell) = xintminus(nloc)
-                 xintright(iccnt,icell) = xintplus(nloc)
-                 eintleft(iccnt,icell) = eintminus(nloc)
-                 eintright(iccnt,icell) = eintplus(nloc)
-                 phicut(iccnt,icell) = floc(nloc) * xlor
-
-               else
-
-                 ecutleft(iccnt,icell) = eminus(jloc-1) -
-     .                   (floc(jloc-1)-fac_cut) /
-     .                   (floc(jloc-1) - floc(jloc)) *
-     .                   (eminus(jloc-1) - eminus(jloc))
-                 ecutright(iccnt,icell) = eplus(jloc-1) +
-     .                   (floc(jloc-1)-fac_cut) /
-     .                   (floc(jloc-1) - floc(jloc)) *
-     .                   (eplus(jloc) - eplus(jloc-1))
-!                 xintleft(iccnt,icell) = xintminus(jloc) +
-!     .                   (fac_cut-floc(jloc)) /
-!     .                   (floc(jloc-1) - floc(jloc)) *
-!     .                   (xintminus(jloc-1) - xintminus(jloc))
-!                 xintright(iccnt,icell) = xintplus(jloc-1) +
-!     .                   (fac_cut-floc(jloc-1)) /
-!     .                   (floc(jloc) - floc(jloc-1)) *
-!     .                   (xintplus(jloc) - xintplus(jloc-1))
-
-                 xintleft(iccnt,icell) = xintminus(jloc) +
-     .                   (ecutleft(iccnt,icell)-eminus(jloc)) /
-     .                   (eminus(jloc-1) - eminus(jloc)) *
-     .                   (xintminus(jloc-1) - xintminus(jloc))
-                 xintright(iccnt,icell) = xintplus(jloc-1) +
-     .                   (ecutright(iccnt,icell)-eplus(jloc-1)) /
-     .                   (eplus(jloc) - eplus(jloc-1)) *
-     .                   (xintplus(jloc) - xintplus(jloc-1))
-
-                 eintleft(iccnt,icell) = eintminus(jloc) +
-     .                   (ecutleft(iccnt,icell)-eminus(jloc)) /
-     .                   (eminus(jloc-1) - eminus(jloc)) *
-     .                   (eintminus(jloc-1) - eintminus(jloc))
-                 eintright(iccnt,icell) = eintplus(jloc-1) +
-     .                   (ecutright(iccnt,icell)-eplus(jloc-1)) /
-     .                   (eplus(jloc) - eplus(jloc-1)) *
-     .                   (eintplus(jloc) - eintplus(jloc-1))
-
-                 phicut(iccnt,icell) = fac_cut * xlor
-
-               end if
-
-               ecutleft(iccnt,icell)=ecutleft(iccnt,icell)+reaction%e0
-               ecutright(iccnt,icell)=ecutright(iccnt,icell)+reaction%e0
-
-               xint_cut(iccnt,icell) = (xintright(iccnt,icell) -
-     .                        xintleft(iccnt,icell)) / xintinf * 100._dp
-            else
-
-! mean free path at line center is larger than the reference value
-              phicut(iccnt,icell) = xlor
-
-            end if
-
-            xint_inf(iccnt,icell) = xintinf
-            eint_inf(iccnt,icell) = eintinf
-
-            call  EIRENE_lorvdwprof(icell,fwhm,shift,dvdw,.true.)
-!pb            xx = ecutright(iccnt,icell)-reaction%e0
-!pb            phicut(iccnt,icell) =
-!pb     .         EIRENE_ph_lorvdw(-xx, fwhm, -shift, dvdw, icell)
-
-            xx =-reaction%e0
-            phi_zero(iccnt,icell) =
-     .           EIRENE_ph_lorvdw(-xx, fwhm, -shift, dvdw, icell)
-
-            call  EIRENE_lorvdwprof(icell,fwhm,shift,dvdw,.false.)
-            l0 = hpcl / reaction%e0
-            xx = -l0
-            phi_inf(iccnt,icell) =
-     .           EIRENE_ph_lorvdw(xx, fwhm, shift, dvdw, icell)
-
-! calculate function values at endpoints of rejection intervals
-            if (mxrjprt .gt. 1) then
-              if (ecutright(iccnt,icell) > ecutleft(iccnt,icell)) then
-                call  EIRENE_lorvdwprof(icell,fwhm,shift,dvdw,.true.)
-                l0right = hpcl / ecutright(iccnt,icell)
-                e00 = reaction%e0
-
-                do irj = 1, reaction%nrjprt-1
-                  elrj = irj*ecutleft(iccnt,icell)/reaction%nrjprt
-                  xxl = elrj-e00
-                  phi_rj_left(iccnt,irj,icell) =
-     .                EIRENE_ph_lorvdw(-xxl, fwhm, -shift, dvdw, icell)
-
-                  lrj = irj*l0right/reaction%nrjprt
-                  errj = hpcl/lrj
-                  xxr = errj-e00
-                  phi_rj_right(iccnt,irj,icell) =
-     .                EIRENE_ph_lorvdw(-xxr, fwhm, -shift, dvdw, icell)
-                end do
-              else
-                phi_rj_left(iccnt,:,icell) = 0.
-                phi_rj_right(iccnt,:,icell) = 0.
-              end if
-            end if
-
-          end do  ! cell loop
-
-
-        end do  ! iirc
-      end do  ! iplsi
-
-      deallocate (ete)
-      deallocate (en0)
-      deallocate (en0log)
-      deallocate (floc)
-      deallocate (eminus)
-      deallocate (eplus)
-      deallocate (tab_emax)
-      deallocate (tab_lor)
-      deallocate (tab_zmfp)
-      deallocate (tab_eminus)
-      deallocate (tab_eplus)
-
-      return
-      end subroutine EIRENE_line_cutoff
-
-
-      function EIRENE_sam_cutoff (ictoff,icell) result (res)
-      integer, intent(in) :: ictoff,icell
+      function EIRENE_sam_cutoff (kk,ictoff,icell) result (res)
+      integer, intent(in) :: kk,ictoff,icell
       real(dp) :: xintsum, xi1, xi2, res, e00, xx, phi_xi1, fwhm,
      .            shift, dvdw, l00, l0cut, e_xi1, a, b, c, rd,
      .            phi_xx, fcut, e1, e2, es, sint, lright, l1, l2, ls,
@@ -3654,7 +2827,7 @@ c
       integer :: icount, nrjp, irj
       external :: eirene_exit_own
 
-      nrjp = reaction%nrjprt
+      nrjp = reacdat(kk)%phr%line%nrjprt
 
       if ((ictsave /= ictoff) .and. (nrjp > 1)) then
         ictsave = ictoff
@@ -3696,7 +2869,7 @@ c
 
       xintsum = xintleft(ictoff,icell) +
      .         (xint_inf(ictoff,icell)-xintright(ictoff,icell))
-      e00 = reaction%e0
+      e00 = reacdat(kk)%phr%line%e0
       l00=hpcl/e00
 
       icount=0
@@ -3709,7 +2882,7 @@ c  use energy scale
 
 c  use rectangle for rejection
 
-          call  EIRENE_lorvdwprof(icell,fwhm,shift,dvdw,.true.)
+          call  EIRENE_lorvdwprof(kk,icell,fwhm,shift,dvdw,.true.)
 
           do
             icount = icount + 1
@@ -3729,7 +2902,7 @@ c    .                           res
 
 !  use triangle for rejection
 
-          call  EIRENE_lorvdwprof(icell,fwhm,shift,dvdw,.true.)
+          call  EIRENE_lorvdwprof(kk,icell,fwhm,shift,dvdw,.true.)
           phidif = phicut(ictoff,icell) - phi_zero(ictoff,icell)
 
           do
@@ -3781,7 +2954,7 @@ c    .                           res
 
           end if
 
-          call  EIRENE_lorvdwprof(icell,fwhm,shift,dvdw,.true.)
+          call  EIRENE_lorvdwprof(kk,icell,fwhm,shift,dvdw,.true.)
 
           do
 
@@ -3843,7 +3016,7 @@ c  use wavelength scale
           l0cut = hpcl/ecutright(ictoff,icell)
           phlamcut = phicut(ictoff,icell)*hpcl/(l0cut*l0cut)
 
-          call  EIRENE_lorvdwprof(icell,fwhm,shift,dvdw,.false.)
+          call  EIRENE_lorvdwprof(kk,icell,fwhm,shift,dvdw,.false.)
 
           do
             icount = icount + 1
@@ -3869,7 +3042,7 @@ c    .                         res
           l0cut = hpcl/ecutright(ictoff,icell)
           phlamcut = phicut(ictoff,icell)*hpcl/(l0cut*l0cut)
 
-          call  EIRENE_lorvdwprof(icell,fwhm,shift,dvdw,.false.)
+          call  EIRENE_lorvdwprof(kk,icell,fwhm,shift,dvdw,.false.)
           phidif = phlamcut - phi_inf(ictoff,icell)
 
           do
@@ -3927,7 +3100,7 @@ c    .                           res
 
           end if
 
-          call EIRENE_lorvdwprof(icell,fwhm,shift,dvdw,.true.)
+          call EIRENE_lorvdwprof(kk,icell,fwhm,shift,dvdw,.true.)
 
           do
             icount = icount + 1
@@ -3981,6 +3154,7 @@ c    .                           res
       return
       end function EIRENE_sam_cutoff
 
+cdr nov 20:  this next routine is now entirely obsolete 
 
       SUBROUTINE EIRENE_BROADCAST_PHOTON(ME)
       USE EIRMOD_MPI
@@ -4017,33 +3191,6 @@ c    .                           res
           CALL MPI_BCAST (PHV_N2NDOTAT,(NATM+1)*NNROT*3,
      .                    MPI_INTEGER,0,MPI_COMM_WORLD,ier)
         END IF
-
-        nnrot=0
-        do iphot=1,nphoti
-          if(nrcph(iphot) > 0) then
-            do nrc=1,nrcph(iphot)
-              kk=ireacph(iphot,nrc)
-              if(iswr(kk) == 7) then
-                NNROT=NNROT+1
-              endif
-            enddo
-          endif
-        enddo
-        IF (ME .NE. 0) call EIRENE_PH_ALLOC_XSECTPH(nnrot)
-        IF (NNROT > 0) THEN
-          CALL MPI_BCAST (PHV_LGPHOT,(NPHOT+1)*(NNROT+1)*6,
-     .                    MPI_INTEGER,0,MPI_COMM_WORLD,ier)
-          CALL MPI_BCAST (PHV_NPHOTI,NPHOT,
-     .                    MPI_INTEGER,0,MPI_COMM_WORLD,ier)
-          CALL MPI_BCAST (PHV_IESTOTPH,(NPHOT+1)*NNROT*3,
-     .                    MPI_INTEGER,0,MPI_COMM_WORLD,ier)
-          CALL MPI_BCAST (PHV_N1STOTPH,(NPHOT+1)*NNROT*3,
-     .                    MPI_INTEGER,0,MPI_COMM_WORLD,ier)
-          CALL MPI_BCAST (PHV_N2NDOTPH,(NPHOT+1)*NNROT*3,
-     .                    MPI_INTEGER,0,MPI_COMM_WORLD,ier)
-        END IF
-        CALL MPI_BCAST (HPCL,1,MPI_REAL8,0,MPI_COMM_WORLD,ier)
-        CALL MPI_BCAST (CLIGHT,1,MPI_REAL8,0,MPI_COMM_WORLD,ier)
 
       END IF
 

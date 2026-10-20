@@ -141,7 +141,6 @@ C                 VOLUME SOURCE DISTRIBUTION IS ASSIGNED
         ALLOCATE (LATSSR(NATMI))
         LPLSSR = .FALSE.
         LATSSR = .FALSE.
-
         DO ISTR=1,NSTRAI
           IF (NLVOL(ISTR) .AND. NLPLS(ISTR)
      .        .AND. (FLUX(ISTR) > 0._DP)) THEN
@@ -159,6 +158,7 @@ c  nspez out of range for at least one stratum: Set volumetric sources for ALL s
         MXPLS=COUNT(LPLSSR(1:NPLSI))
 c  cumulated distribution of cell number index NCELL
         ALLOCATE (FREC(0:MXPLS,0:MXREC,0:NRAD))
+c        ALLOCATE (FREC(0:NPLSI,0:MXREC,0:NRAD))
 c  same, but compressed: only non-zero entries thereof, for faster NCELL sampling by inversion method
         ALLOCATE (VSOURC(NSRFS,0:NRAD))
         ALLOCATE (VSMXI(NSRFS))
@@ -624,7 +624,8 @@ c
               IF (SUMN.EQ.0.D0) THEN
                 WRITE (IUNOUT,*) 'NO VOLUMETRIC SOURCE RATE FOR:'
                 WRITE (IUNOUT,*) 'ISTRA, IVOLSI, IPLS, ISTEP ',
-     .                            ISTRA, IVL   , IPLS, ISTEP
+     .                            ISTRA, IVL   , IPLS, ISTEP, 
+     .                            SUM(DIIN(IPLS,1:NSBOX))
                 WRITE (IUNOUT,*) 'EITHER: ISTEP OUT OF RANGE IN SAMVOL'
                 WRITE (IUNOUT,*) 'OR: DENSITY OF "RECOMBINING" IPLS = 0'
                 SORWGT(IVL,ISTRA)=0.D0
@@ -655,9 +656,19 @@ C
      .                          ISTRA, FLUX(ISTRA), SUMEIT)
             CALL EIRENE_LEER(1)
           ELSE
-            FLUX(ISTRA)=0.D0
-            WRITE (iunout,*) 'SOURCE ISTRA= ',ISTRA,' TURNED OFF '
-            CALL EIRENE_LEER(1)
+crc now requires 2 iterations before stratum is off, for bgk with 1 iteration
+crc only relevant for coupled runs
+crc better solutions probably exist, quick fix for now
+            IF (FLUX(ISTRA).GE.1.0D0) THEN
+                WRITE (iunout,*) 'SOURCE STRENGTH ZERO ON ',
+     .            'FIRST PASS, SETTING TO 0.5'
+                CALL EIRENE_LEER(1)
+                FLUX(ISTRA)=0.5D0
+            ELSE
+                FLUX(ISTRA)=0.D0
+                WRITE (iunout,*) 'SOURCE ISTRA= ',ISTRA,' TURNED OFF '
+                CALL EIRENE_LEER(1)
+            END IF    
           ENDIF
         ENDIF
    50 CONTINUE

@@ -35,11 +35,11 @@ c
 c  fetch data for process nrc of ipls
 
       kk = IREACP(ipls,nrc)
-      if (kk /= idreac) call EIRENE_get_reaction(kk)
+c      if (kk /= idreac) call EIRENE_get_reaction(kk)
 
       FACTKK=FREACP(IPLS,NRC)
       IF (FACTKK.EQ.0.D0) FACTKK=1.
-      aik=reaction%aik
+      aik=reacdat(kk)%phr%line%aik
 
 
       IPL0 =EIRENE_IDEZ(IBULKP(ipls,nrc),3,3)

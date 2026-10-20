@@ -89,6 +89,7 @@ C
      .                       noptim_in, nrtal_in, nsmstra_in, nstrai_in,
      .                       dbfname_in,
      .                       eirene_init_input_blocks
+      USE EIRMOD_COMXS, ONLY : MAXCRM, NCR_REAC, CR_KEY
 !pgf      use json_module, ck => json_ck
 !cym/cpg, keep using json_ck
 !      use json_module           !IGNORE
@@ -619,10 +620,12 @@ C
       class(json_core),intent(inout) :: json
       type(json_value), pointer, intent(in) :: p
 
-      type(json_value), pointer :: species, preac, pspecs, pspc
-      integer :: nreaci
+      type(json_value), pointer :: species, preac, pspecs, pspc,
+     .                             preacs, prea
+      integer :: nreaci,i,k
       logical :: found
       character(50) :: s1, s2
+      character(kind=json_CK,len=:), allocatable :: zeile
 
       WRITE (iunout,*) '*** 4. DATA FOR SPECIES SPECIFICATION AND'
       WRITE (iunout,*) '       ATOMIC PHYSICS MODULE'
@@ -637,12 +640,37 @@ C
 !PB   increase number of reactions by 1 as there are still
 !PB   calls to SLREAC which use reaction number NREACI+1 (SGNAL and HE_EMISS)
       NREAC = MAX(NREAC,NREACI+1)
-
-
+      
       call json%get_child(p,'SPECIES_SPEC',species,found)
       call json%get_child(species,'REACTIONS',preac,found)
       call json%get_child(preac,'REAC_SPECS',pspecs,found)
       NREAC_LINES=json%count(pspecs)
+
+c  Count number of reaction data sets using internal coll. rad. models, currently H, He
+cdr   NRC_REAC(1): no. of H_colrad reaction rates or pop-coef data,
+cdr   NRC_REAC(4): no. of He_colrad reaction rates or pop-coef data
+      NCR_REAC = 0
+      DO k = 1, NREAC_LINES
+        call json%get_child(pspecs,k,prea,found)
+        call json%get(prea,'FILNAM',zeile,found)
+        IF (INDEX(zeile,json_CK_'CR') > 0) THEN
+!  coll. rad. model found
+          IF (INDEX(zeile,json_CK_'CR_') > 0) THEN
+!  coll. rad. model specified in more detail
+            DO i = MAXCRM, 1, -1
+              IF (LEN_TRIM(CR_KEY(I)) > 0) THEN
+                IF (INDEX(zeile,TRIM(CR_KEY(I))) > 0)
+     .            NCR_REAC(I) = NCR_REAC(I) + 1
+              END IF
+            END DO
+          ELSE
+!  use default coll. rad. model for hydrogen H, formulation II
+          NCR_REAC(1) = NCR_REAC(1) + 1
+          END IF
+        ENDIF
+        nullify(prea)
+        deallocate(zeile)
+      END DO
 
 !  ATOMS
 
