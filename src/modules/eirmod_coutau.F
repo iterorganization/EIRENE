@@ -3020,16 +3020,18 @@ cdr                     ISP=0 is for sum over species AND vector components
       END SUBROUTINE EIRENE_FETCH_OUTAUI
 
 
-      SUBROUTINE EIRENE_FETCH_OUTAU (OUTAU,ITAL,ISP,ISTR,IC1,IC2,IUNOUT)
+      SUBROUTINE EIRENE_FETCH_OUTAU (OUTAU,ITAL,ISP,ISTR,IUNOUT)
 cdr return OUTAU = eirene tally,
 cdr for tally ITAL, species ISP, stratum ISTRA=IESTR?
 cdr The entire tally is returned with ic1=1, ic2=NSBOX_TAL 
       USE EIRMOD_CESTIM 
-cdr   USE EIRMOD_CGRID, ONLY : NSBOX_TAL
+      USE EIRMOD_CGRID, ONLY : NSBOX, NSBOX_TAL
       USE EIRMOD_CSPEI, ONLY : IESTR
-      INTEGER, INTENT(IN) :: ITAL, ISP, ISTR, IUNOUT, IC1, IC2
+      USE EIRMOD_CGEOM, ONLY : NCLTAL
+
+      INTEGER, INTENT(IN) :: ITAL, ISP, ISTR, IUNOUT
       REAL(DP), INTENT(OUT) :: OUTAU(NRAD)
-      INTEGER :: I, K, NF, IINDEX
+      INTEGER :: I, K, NF, IINDEX, ICELL
 
       OUTAU=0._DP
 
@@ -3046,10 +3048,20 @@ CDR  CHECK: IESTR=ISTR ??
       K = ISP
 
 
-      DO I=IC1,IC2
-              IINDEX=NADDV(ITAL)*NRAD+(I-1)*NF+K
-              OUTAU(I)=ESTIMV(NADDV(ITAL)+K,I)
-      ENDDO
+      IF (NSBOX_TAL /= NSBOX) THEN
+        DO I=1,NSBOX
+          ICELL = NCLTAL(I)
+          IF (ICELL > 0) THEN
+            OUTAU(I)=ESTIMV(NADDV(ITAL)+K,ICELL)
+          ELSE
+            OUTAU(I)=0._DP
+          END IF
+        END DO
+      ELSE
+        DO I=1,NSBOX_TAL
+          OUTAU(I)=ESTIMV(NADDV(ITAL)+K,I)
+        END DO
+      END IF
 
       RETURN
       END SUBROUTINE EIRENE_FETCH_OUTAU
