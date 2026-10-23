@@ -1,12 +1,10 @@
 # Test whether necessary variables are set
-GR_ROOT  ?= /global/project/projectdirs/atom/atom-install-cori/solps-libs/lib_gfortran
-GLI_HOME ?= /global/project/projectdirs/atom/atom-install-cori/solps-libs/lib_gfortran
-SOLPSLIB ?= ${SOLPSTOP}/lib/${HOST_NAME}.${COMPILER}
+GR_ROOT  ?=  ${SOLPSLIB}/gr
+GLI_HOME ?= ${SOLPSLIB}/gli/src/gks
 LD_GR    ?= -L${GR_ROOT} -lgr
-LD_GKS   ?= -L${GLI_HOME} -lgks
-LD_NAG   ?= -L${SOLPSLIB} -lblas -llapack
+LD_GKS   ?= -L${SOLPSLIB}/gli/src/gks -lgks
 
-CPP       = cpp -traditional
+CPP       = CC -traditional
 FC        = ftn
 CC        = cc
 
@@ -26,6 +24,18 @@ GKS       = ${LD_GR} ${LD_GKS} -lX11 -lXt
 LDLIBS    =
 
 INCMOD    = -I
+
+# Build with JSON if present
+ifeq ($(shell `pkg-config --exists json-fortran`; echo $$?),0)
+  JSON_INC ?= $(shell pkg-config json-fortran --cflags)
+  LD_JSON ?= $(shell pkg-config json-fortran --libs)
+else
+  ifndef SOLPS_CPP
+    DEFINES += -DNO_JSON
+  endif
+endif
+
+INCLUDE  += ${JSON_INC}
 
 #!!!Local Variables:
 #!!! mode: Makefile
