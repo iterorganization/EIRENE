@@ -86,31 +86,64 @@
         end do
         call json%add(REACT,crs_lines)
       end if
+      block
+        character(len=256) :: first_line
+        character(len=64)  :: extra_line
+        character(len=:), allocatable :: reaction_text
 
-      do i=1, IRLINES
- 100     format(i3,1x,A8,1x,A4,1x,A,1x,A3,1x,i3,1x,i3,5es12.4)
-         write (sCReactStr, 100) reaclines(i)%no, reaclines(i)%FILE,
-     >         reaclines(i)%h_select,reaclines(i)%reac_string,
-     >         reaclines(i)%reactyp,reaclines(i)%mp,
-     >         reaclines(i)%mt,reaclines(i)%dpp,
-     >         reaclines(i)%r1mn,reaclines(i)%r1mx,
-     >         reaclines(i)%r2mn,reaclines(i)%r2mx
+        do i=1, IRLINES
 
-          if (reaclines(i)%r1mn > 0)
-     >    write (sCReactStr, "(A/,i3,1x,3es12.4)")  sCReactStr,
-     >           reaclines(i)%jfex1mn, reaclines(i)%fp1(1:3)
-          if (reaclines(i)%r1mx.gt.0)
-     >    write (sCReactStr, "(A,i3,1x,3es12.4)")  sCReactStr,
-     >           reaclines(i)%jfex1mx, reaclines(i)%fp1(4:6)
-          if (reaclines(i)%r2mn.gt.0)
-     >    write (sCReactStr, "(A,i3,1x,3es12.4)")  sCReactStr,
-     >           reaclines(i)%jfex2mn, reaclines(i)%fp2(1:3)
-          if (reaclines(i)%r2mx.gt.0)
-     >    write (sCReactStr, "(A,i3,1x,3es12.4)")  sCReactStr,
-     >           reaclines(i)%jfex2mx, reaclines(i)%fp2(4:6)
+ 100      format(i3,1x,A8,1x,A4,1x,A,1x,A3,1x,
+     >           i3,1x,i3,5es12.4)
 
-          call json%add(REACT, 'CStr' ,sCReactStr)
-      enddo
+          write(first_line,100)
+     >      reaclines(i)%no, reaclines(i)%FILE,
+     >      reaclines(i)%h_select,
+     >      reaclines(i)%reac_string,
+     >      reaclines(i)%reactyp,
+     >      reaclines(i)%mp, reaclines(i)%mt,
+     >      reaclines(i)%dpp,
+     >      reaclines(i)%r1mn,reaclines(i)%r1mx,
+     >      reaclines(i)%r2mn,reaclines(i)%r2mx
+
+          reaction_text = trim(first_line)
+
+          if (reaclines(i)%r1mn > 0) then
+            write(extra_line,'(i3,1x,3es12.4)')
+     >        reaclines(i)%jfex1mn,
+     >        reaclines(i)%fp1(1:3)
+            reaction_text = reaction_text //
+     >                      achar(10) // trim(extra_line)
+          endif
+
+          if (reaclines(i)%r1mx > 0) then
+            write(extra_line,'(i3,1x,3es12.4)')
+     >        reaclines(i)%jfex1mx,
+     >        reaclines(i)%fp1(4:6)
+            reaction_text = reaction_text //
+     >                      achar(10) // trim(extra_line)
+          endif
+
+          if (reaclines(i)%r2mn > 0) then
+            write(extra_line,'(i3,1x,3es12.4)')
+     >        reaclines(i)%jfex2mn,
+     >        reaclines(i)%fp2(1:3)
+            reaction_text = reaction_text //
+     >                      achar(10) // trim(extra_line)
+          endif
+
+          if (reaclines(i)%r2mx > 0) then
+            write(extra_line,'(i3,1x,3es12.4)')
+     >        reaclines(i)%jfex2mx,
+     >        reaclines(i)%fp2(4:6)
+            reaction_text = reaction_text //
+     >                      achar(10) // trim(extra_line)
+          endif
+
+          call json%add(REACT,'CStr',reaction_text)
+
+        enddo
+      end block
 
 
 #ifdef NEVERCOMEHERE
