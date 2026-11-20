@@ -513,17 +513,17 @@ C     READ IN THE NUMBER OF TRIANGLES
             if (lpdena) dab2(ix,iy,jatm,1)=dab2(ix,iy,jatm,1)+
      &                         pdena(jatm,in)*1.0e6_dp*vl
 !   IYS 20.01.2017
-! rfluxa, pfluxa and tfluxa are cell-centered mass flux densities
-! converted from g*(cm/s)/cm^3 to kg*(m/s)/m^3
+! rfluxa, pfluxa and tfluxa are cell-centered particle flux densities
+! The Eirene momentum densities are converted from g*(cm/s)/cm^3 to kg*(m/s)/m^3
             if (LVXDENA.AND.LVYDENA) then
               rfluxa(ix,iy,jatm,1)=rfluxa(ix,iy,jatm,1)+
      &             (-VXDENA(jatm,in)*PUY(inc)+
      &               VYDENA(jatm,in)*PVY(inc))*
-     &          vl*10.0_dp/NMASSA(jatm)/AMUAKG
+     &          vl*10.0_dp/RMASSA(jatm)/AMUAKG
               pfluxa(ix,iy,jatm,1)=pfluxa(ix,iy,jatm,1)+
      &             (VXDENA(jatm,in)*PUX(inc)-
      &              VYDENA(jatm,in)*PVX(inc))*
-     &          vl*10.0_dp/NMASSA(jatm)/AMUAKG
+     &          vl*10.0_dp/RMASSA(jatm)/AMUAKG
             else if (laddv) then
              if(ia0+jatm.le.nadv)
      >        rfluxa(ix,iy,jatm,1)=rfluxa(ix,iy,jatm,1)+
@@ -533,7 +533,7 @@ C     READ IN THE NUMBER OF TRIANGLES
      &                                   addv(ia2+jatm,in)*1.0e4_dp
             end if
             if (LVZDENA) tfluxa(ix,iy,jatm,1)=tfluxa(ix,iy,jatm,1)+
-     &             VZDENA(jatm,in)*vl*10.0_dp/NMASSA(jatm)/AMUAKG
+     &             VZDENA(jatm,in)*vl*10.0_dp/RMASSA(jatm)/AMUAKG
 
 !   IYS 20.01.2017
 !   refluxa and pefluxa - energy flux density components -
@@ -565,18 +565,18 @@ C     READ IN THE NUMBER OF TRIANGLES
             if (lpdenm) dmb2(ix,iy,jmol,1)=dmb2(ix,iy,jmol,1)+
      &                         pdenm(jmol,in)*1.0e6_dp*vl
 !   IYS 20.01.2017
-! rfluxm, pfluxm and tfluxm are cell-centered mass flux densities
-! converted from g*(cm/s)/cm^3 to kg*(m/s)/m^3
+! rfluxm, pfluxm and tfluxm are cell-centered particle flux densities
+! The Eirene momentum densities are converted from g*(cm/s)/cm^3 to kg*(m/s)/m^3
             if (LVXDENM.AND.LVYDENM) then
               rfluxm(ix,iy,jmol,1)=rfluxm(ix,iy,jmol,1)+
      &             (-VXDENM(jmol,in)*PUY(inc)+
      &               VYDENM(jmol,in)*PVY(inc))*
-     &           vl*10.0_dp/NMASSM(jmol)/AMUAKG
+     &           vl*10.0_dp/RMASSM(jmol)/AMUAKG
 
               pfluxm(ix,iy,jmol,1)=pfluxm(ix,iy,jmol,1)+
      &             (VXDENM(jmol,in)*PUX(inc)-
      &              VYDENM(jmol,in)*PVX(inc))*
-     &           vl*10.0_dp/NMASSM(jmol)/AMUAKG
+     &           vl*10.0_dp/RMASSM(jmol)/AMUAKG
             else if (laddv) then
              if(ia0+natmi+jmol.le.nadv)
      >         rfluxm(ix,iy,jmol,1)=rfluxm(ix,iy,jmol,1)+
@@ -586,7 +586,7 @@ C     READ IN THE NUMBER OF TRIANGLES
      &                                 addv(ia2+natmi+jmol,in)*1.0e4_dp
             end if
             if (LVZDENM) tfluxm(ix,iy,jmol,1)=tfluxm(ix,iy,jmol,1)+
-     &             VZDENM(jmol,in)*vl*10.0_dp/NMASSM(jmol)/AMUAKG
+     &             VZDENM(jmol,in)*vl*10.0_dp/RMASSM(jmol)/AMUAKG
 
 !   IYS 20.01.2017
 !   refluxm and pefluxm - energy flux density components -
