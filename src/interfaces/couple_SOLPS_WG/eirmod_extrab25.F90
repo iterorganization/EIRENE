@@ -88,7 +88,7 @@
       integer, public, save :: ini_iniusr=0
 
       !format flags for output files
-      integer, public, save :: jvft44=20260128, jvft46=20170930
+      integer, public, save :: jvft44=20261124, jvft46=20170930
 
       !names for atoms
       character*8, save, public, allocatable :: texta(:)
@@ -353,6 +353,11 @@
       !c*** from 20071209 on:
         call write_title(44,'eneutrad',n2*natmi)
         call eirene_neutr(44,ncvp,natmi,eneutrad,ncvp,natm,1,1) !ak+vk
+      !c*** from 20261124 on:
+        if (jvft44.ge.20261124) then
+          call write_title(44,'eplasrad',n2*natmi)
+          call eirene_neutr(44,ncvp,natmi,eplasrad,ncvp,natm,1,1)
+        end if
       !c*** from 20180323 on:
         if (nmoli.gt.0) then
           call write_title(44,'emolrad',n2*nmoli)
@@ -462,6 +467,11 @@
       !c*** from 20071209 on:
         call write_title(44,'eneutrad',n2*natmi)
         call eirene_neutr(44,ncvp,natmi,eneutrad,ncvp,natm,1,1) !ak+vk
+      !c*** from 20261124 on:
+        if (jvft44.ge.20261124) then
+          call write_title(44,'eplasrad',n2*natmi)
+          call eirene_neutr(44,ncvp,natmi,eplasrad,ncvp,natm,1,1)
+        end if
       !c*** from 20180323 on:
         if (nmoli.gt.0) then
           call write_title(44,'emolrad',n2*nmoli)

@@ -208,6 +208,7 @@ C
      . SEES0(:), SEIS0(:), SNIS0(:,:), SMOS0(:,:),
      . RESSNI(:,:), RESSMO(:,:),
      . RESSEE(:), RESSEI(:),
+     . VOLSUMRE(:),
      . FLXEIR(:)
       REAL(DP), ALLOCATABLE, SAVE ::
      . CHPM(:,:), CHEEM(:), CHEIM(:), CHMOM(:,:)
@@ -312,6 +313,7 @@ cdr  Always needed for vol rec strata. Not only for short cycle
         ALLOCATE (MPPL_COP(3*NPLS,NRAD))
         ALLOCATE (EPPL_COP(NPLS,NRAD))
         ALLOCATE (EPEL_COP(NRAD))
+        ALLOCATE (RPEL_COP(NATM,NRAD))
 
 cdr  for short cycle only. Obsolete
         ALLOCATE (PPLODA(NPLS,NRAD))
@@ -2412,7 +2414,7 @@ C
       LOGICAL, INTENT(INOUT) :: LSTP
       REAL(DP), SAVE :: SEES, SEIS,
      .          SMOCL_VEC(0:2), SNIRES, SMORES, SEERES, SEIRES,
-     .          SUMM_VEC(0:2), SUMN, SUMEI, SUMEE, SUMN_OLD,
+     .          SUMM_VEC(0:2), SUMN, SUMEI, SUMEE, SUMRE, SUMN_OLD,
      .          TEST, FLX, FLXI,
      .          RECADD, RECTOT, PIADD_VEC(0:2),
      .          PRESS00, SNICL, FLX_EIR,
@@ -2422,7 +2424,7 @@ C
       INTEGER :: I, JATM, JMOL, JION, JPLS, IPLSV, IPLSTI, ISTRAI,
      .           IN, IT, IC, IFL, INC, IIRC, IRRC, IST_RATE, IER,
      .           ISTAT_COP, ICPV, ICOND,
-     .           KK, KKK, ICO
+     .           KK, KKK, ICO, JATRC
       INTEGER, SAVE :: IFIRST
 
       TYPE(CELLSIM), POINTER :: CPSIM
@@ -2486,6 +2488,7 @@ csw 14jul2011
         ALLOCATE (RESSEI(0:NSTRA))
 
         ALLOCATE (FLXEIR(NSTRA))
+        ALLOCATE (VOLSUMRE(NSTRA))
 
         CALL EIRENE_ALLOC_BRASPOI
         CALL EIRENE_ALLOC_EIRBRA(NCVP,NFL,NATM,NMOL,NION,NSTRA)
@@ -2508,6 +2511,7 @@ cdr  Always needed for vol. rec. strata. Not only for short cycle
         ALLOCATE (MPPL_COP(3*NPLS,NRAD))
         ALLOCATE (EPPL_COP(NPLS,NRAD))
         ALLOCATE (EPEL_COP(NRAD))
+        ALLOCATE (RPEL_COP(NATM,NRAD))
 cdr  next 4: for short cycle. Obsolete
         ALLOCATE (PPLODA(NPLS,NRAD))
         ALLOCATE (MPLODA(3*NPLS,NRAD))
@@ -2538,6 +2542,7 @@ C
       volSUMM(0:2,ISTRAA:ISTRAE)=0.0       !dr
       volSUMEI(ISTRAA:ISTRAE)=0.0          !dpc
       volSUMEE(ISTRAA:ISTRAE)=0.0          !dpc
+      volSUMRE(ISTRAA:ISTRAE)=0.0
 
       DO 10000 ISTRAI=ISTRAA,ISTRAE
 C
@@ -3078,6 +3083,7 @@ C
         MPPL_COP = 0.D0
         EPPL_COP = 0.D0
         EPEL_COP = 0.D0
+        RPEL_COP = 0.D0
 
         IF (NLVOL(ISTRAI).AND.NLPLS(ISTRAI)) THEN
 C
@@ -3090,10 +3096,20 @@ cdr  only one bulk ion species per volume source stratum supported
           IPLSTI = MPLSTI(IPLS)
           DO 7472 IIRC=1,NPRCI(IPLS)
             IRRC=LGPRC(IPLS,IIRC)
+C  RPEL is a per-ATOM-species tally. The atom species comes from the
+C  reaction card itself: its product code (e.g. 211 = one neutral atom,
+C  item 2) is decoded by EIRENE into NATPRC(IRRC), the index in the
+C  neutral-atom list. This is exact even when two atoms share mass and
+C  charge (metastables, excited states), and it excludes higher charge
+C  states automatically: their recombination product is an ion, not an
+C  atom, so NATPRC(IRRC)=0 and the accumulation is skipped.
+            JATRC = NATPRC(IRRC)
+            IF (JATRC.LT.1 .OR. JATRC.GT.NATMI) JATRC = 0
             SUMN=0.0
             SUMM_VEC(0:2)=0.0
             SUMEI=0.0
             SUMEE=0.0
+            SUMRE=0.0
             lhit = .false.
             DO 7471 IN=1,NTRII
               INC=NCLTAL(IN)
@@ -3130,6 +3146,9 @@ cdr  mppl_cop is a vectorial tally: par., perp., and diamagn. component
                 ENDDO
                 EPPL_COP(IPLS,INC)=EPPL_COP(IPLS,INC)+EIADD
                 EPEL_COP(INC)=EPEL_COP(INC)+EEADD
+                IF (JATRC.GT.0) RPEL_COP(JATRC,INC)=
+     &                          RPEL_COP(JATRC,INC)+
+     &                          (EEADD+DELPOT(NELRRC(IRRC))*RECADD)
                 lhit(inc) = .true.
               end if
 
@@ -3141,6 +3160,8 @@ cdr  mppl_cop is a vectorial tally: par., perp., and diamagn. component
               SUMM_VEC(0:2) =SUMM_VEC(0:2) +PIADD_VEC(0:2) *VOL(IN)
               SUMEI=SUMEI+EIADD*VOL(IN)
               SUMEE=SUMEE+EEADD*VOL(IN)
+              IF (JATRC.GT.0) SUMRE=SUMRE+
+     &          (EEADD+DELPOT(NELRRC(IRRC))*RECADD)*VOL(IN)
 
  7471       CONTINUE  ! loop over grid
 
@@ -3151,10 +3172,12 @@ cdr  mppl_cop is a vectorial tally: par., perp., and diamagn. component
      .           ('SUMN, SUMM_VEC, SUMEI, SUMEE                    ',
      .             SUMN, SUMM_VEC(0), SUMM_VEC(1), SUMM_VEC(2),
      .             SUMEI, SUMEE)
+            CALL EIRENE_MASR1('SUMRE   ',SUMRE)
             volSUMN(ISTRAI)=volSUMN(ISTRAI)+SUMN             ! dpc
             volSUMM(0:2,ISTRAI)=volSUMM(0:2,ISTRAI)+SUMM_VEC(0:2)! dr
             volSUMEI(ISTRAI)=volSUMEI(ISTRAI)+SUMEI          ! dpc
             volSUMEE(ISTRAI)=volSUMEE(ISTRAI)+SUMEE          ! dpc
+            volSUMRE(ISTRAI)=volSUMRE(ISTRAI)+SUMRE
  7472     CONTINUE  !IRRC
 
           WRITE (iunout,*) 'TOTAL'
@@ -3163,6 +3186,7 @@ cdr  mppl_cop is a vectorial tally: par., perp., and diamagn. component
      .           volSUMN(ISTRAI),   volSUMM(0,ISTRAI),
      .           volSUMM(1,ISTRAI), volSUMM(2,ISTRAI),
      .           volSUMEI(ISTRAI),  volSUMEE(ISTRAI))
+          CALL EIRENE_MASR1('SUMRE   ',volSUMRE(ISTRAI))
 cdr
 CC SUMN_OLD=WTOTP ???
           IF (.NOT.LSHORT) SUMN_OLD=RECTOT
@@ -3175,6 +3199,7 @@ C  BECAUSE ALSO PAPL,.... ARE SCALED LIKE THIS
           MPPL_COP=MPPL_COP*SUMN_OLD/RECTOT
           EPPL_COP=EPPL_COP*SUMN_OLD/RECTOT
           EPEL_COP=EPEL_COP*SUMN_OLD/RECTOT
+          RPEL_COP=RPEL_COP*SUMN_OLD/RECTOT
 
 C  RESCALE SOURCES FOR B2 (PPPL_COP,PAPL,....) TO NEW SOURCE STRENGTH
           FLXEIR(ISTRAI)=RECTOT/SUMN_OLD
@@ -5615,6 +5640,7 @@ c
         DEALLOCATE (MPPL_COP)
         DEALLOCATE (EPPL_COP)
         DEALLOCATE (EPEL_COP)
+        DEALLOCATE (RPEL_COP)
 
         DEALLOCATE (PPLODA)
         DEALLOCATE (MPLODA)

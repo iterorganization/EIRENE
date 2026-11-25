@@ -44,6 +44,7 @@
 !c***    eneutrad:  power radiated due to neutral atoms
 !c***    emolrad :  power radiated due to molecules
 !c***    eionrad :  power radiated due to molecular ions
+!c***    eplasrad:  power radiated due to plasma (from B2.5 side)
 !c*** Surface data:
 !c***    wldnek  :  net kinetic energy deposited by neutrals
 !c***    wldnep  :  potential energy released by neutrals
@@ -75,7 +76,7 @@
       real(DP), save, allocatable, dimension (:,:), public ::
      , wldpeb,wldspt,wlabsrp,wlpump
       real(DP), save, allocatable, dimension (:,:,:), public ::
-     , eneutrad, emolrad, eionrad
+     , eneutrad, emolrad, eionrad, eplasrad
       real(DP), save, allocatable, public :: eirpump(:),   ! pumped flux
      ,                                       eirspta(:), eirsptm(:)      ! sputtered flux  !iyv 07.03.18
       real(DP), save, public :: aver_frac, aver_frac46
@@ -222,6 +223,7 @@
       allocate(eneutrad(ncv,natm,0:nstra+1))
       allocate(emolrad(ncv,nmol,0:nstra+1))
       allocate(eionrad(ncv,nion,0:nstra+1))
+      allocate(eplasrad(ncv,natm,0:nstra+1))
       allocate(isrftype(nlimps))
       allocate(wlarea(nlim+nsts))
       allocate(wlabsrp(nspz,nlim+nsts))
@@ -407,6 +409,7 @@ C     READ IN THE NUMBER OF TRIANGLES
       eneutrad(:,:,istra) = 0.0_dp
       emolrad(:,:,istra) = 0.0_dp
       eionrad(:,:,istra) = 0.0_dp
+      eplasrad(:,:,istra) = 0.0_dp
       do icell=1,nCip
         do jatm=1,natmi
           if (lrael) eneutrad(icell,jatm,istra)=
@@ -420,6 +423,14 @@ C     READ IN THE NUMBER OF TRIANGLES
           if (lriel) eionrad(icell,jion,istra)=
      &      eionrad(icell,jion,istra)+riel(jion,icell)*voltal(icell)
         enddo
+c  RPEL (radiation of electrons on plasma) is produced per atom species
+c  and per cell in EIRENE_IF3COP and kept in EIRMOD_CCOUPL.
+        if (allocated(RPEL_COP)) then
+          do jatm=1,natmi
+            eplasrad(icell,jatm,istra)=eplasrad(icell,jatm,istra)+
+     &        RPEL_COP(jatm,icell)*voltal(icell)
+          enddo
+        endif
       enddo
 
       volcel = 0.0_dp
@@ -688,6 +699,7 @@ C     READ IN THE NUMBER OF TRIANGLES
             eneutrad(:,:,k) = 0.0_DP
             emolrad(:,:,k) = 0.0_DP
             eionrad(:,:,k) = 0.0_DP
+            eplasrad(:,:,k) = 0.0_DP
             edissml(:,:,k) = 0.0_DP
             wldnek_aver(:,k) = 0.0_DP
             wldnep_aver(:,k) = 0.0_DP
@@ -774,6 +786,7 @@ C     READ IN THE NUMBER OF TRIANGLES
       eneutrad(:,:,0) = 0.0_DP
       emolrad(:,:,0) = 0.0_DP
       eionrad(:,:,0) = 0.0_DP
+      eplasrad(:,:,0) = 0.0_DP
       edissml(:,:,0) = 0.0_DP
       do ic = 1, ncip
         do jatm=1,natmi
@@ -785,6 +798,9 @@ C     READ IN THE NUMBER OF TRIANGLES
         end do
         do jion=1,nioni
           eionrad(ic,jion,0) = sum(eionrad(ic,jion,1:nstrai))
+        end do
+        do jatm=1,natmi
+          eplasrad(ic,jatm,0) = sum(eplasrad(ic,jatm,1:nstrai))
         end do
       end do
       !c--------------------------------------------------------------->
@@ -1025,6 +1041,7 @@ C     READ IN THE NUMBER OF TRIANGLES
           eneutrad=0.0_DP
           emolrad=0.0_DP
           eionrad=0.0_DP
+          eplasrad=0.0_DP
           pdena_int=0.0_DP
           pdena_int_b2=0.0_DP
           pdenm_int=0.0_DP
@@ -1080,7 +1097,7 @@ C     READ IN THE NUMBER OF TRIANGLES
         deallocate(wldspta)
         deallocate(wldsptm)
         deallocate(isrftype)
-        deallocate(eneutrad,emolrad,eionrad)
+        deallocate(eneutrad,emolrad,eionrad,eplasrad)
       endif
 
       if(allocated(wlarea)) then
@@ -1160,6 +1177,10 @@ C     READ IN THE NUMBER OF TRIANGLES
      &              ierr)
 
       call mpi_send(eionrad(1,1,istra) , size(eionrad(:,:,istra)),
+     &              MPI_DOUBLE_PRECISION, 0, istra, MPI_COMM_WORLD,
+     &              ierr)
+
+      call mpi_send(eplasrad(1,1,istra) , size(eplasrad(:,:,istra)),
      &              MPI_DOUBLE_PRECISION, 0, istra, MPI_COMM_WORLD,
      &              ierr)
 
@@ -1297,6 +1318,10 @@ C     READ IN THE NUMBER OF TRIANGLES
      &              MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 
       call mpi_recv(eionrad(1,1,istra) , size(eionrad(:,:,istra)),
+     &              MPI_DOUBLE_PRECISION, rank, istra,
+     &              MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
+
+      call mpi_recv(eplasrad(1,1,istra) , size(eplasrad(:,:,istra)),
      &              MPI_DOUBLE_PRECISION, rank, istra,
      &              MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
 

@@ -20,6 +20,14 @@
       REAL(DP), PUBLIC, SAVE ::
      R B2BREM,  B2RAD, B2QIE, B2VDP
 
+! Radiation of electrons on PLASMA: power density (W/m3), per ATOM
+! species and per cell. EIRMOD_WNEUTRALS multiplies by the cell
+! volume when filling eplasrad, exactly as it does for eneutrad.
+! Produced in EIRENE_IF3COP for volumetric-recombination strata only
+! (singly charged ions recombining to the neutral), consumed by
+! EIRMOD_WNEUTRALS -> eplasrad -> FORT.44.
+      REAL(DP), PUBLIC, ALLOCATABLE, SAVE :: RPEL_COP(:,:)
+
       INTEGER, PUBLIC, TARGET, ALLOCATABLE, SAVE ::
      I         ICCPL1(:), ICCPL2(:)
       INTEGER, PUBLIC, ALLOCATABLE, SAVE ::
