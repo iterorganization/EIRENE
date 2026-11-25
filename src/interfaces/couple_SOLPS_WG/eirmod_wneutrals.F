@@ -452,17 +452,17 @@ c  and per cell in EIRENE_IF3COP and kept in EIRMOD_CCOUPL.
             if (lpdena) dab2(in,jatm,1)=dab2(in,jatm,1)+
      &                         pdena(jatm,in)*1.0e6_dp
 !   IYS 20.01.2017
-! rfluxa, pfluxa and tfluxa are cell-centered mass flux densities
-! converted from g*(cm/s)/cm^3 to kg*(m/s)/m^3
+! rfluxa, pfluxa and tfluxa are cell-centered particle flux densities
+! The Eirene momentum densities are converted from g*(cm/s)/cm^3 to kg*(m/s)/m^3
             if (LVXDENA.AND.LVYDENA) then
               rfluxa(in,jatm,1)=rfluxa(in,jatm,1)+
      &             (VXDENA(jatm,in)*PVX(in)+
      &              VYDENA(jatm,in)*PVY(in))*
-     &          10.0_dp/NMASSA(jatm)/AMUAKG
+     &          10.0_dp/RMASSA(jatm)/AMUAKG
               pfluxa(in,jatm,1)=pfluxa(in,jatm,1)+
      &             (VXDENA(jatm,in)*PUX(in)+
      &              VYDENA(jatm,in)*PUY(in))*
-     &          10.0_dp/NMASSA(jatm)/AMUAKG
+     &          10.0_dp/RMASSA(jatm)/AMUAKG
             else if (laddv) then
              if(ia0+jatm.le.nadv)
      >        rfluxa(in,jatm,1)=rfluxa(in,jatm,1)+
@@ -472,7 +472,7 @@ c  and per cell in EIRENE_IF3COP and kept in EIRMOD_CCOUPL.
      &                                   addv(ia2+jatm,in)*1.0e4_dp
             end if
             if (LVZDENA) tfluxa(in,jatm,1)=tfluxa(in,jatm,1)+
-     &             VZDENA(jatm,in)*10.0_dp/NMASSA(jatm)/AMUAKG*
+     &             VZDENA(jatm,in)*10.0_dp/RMASSA(jatm)/AMUAKG*
      &             sign(1.0_dp,PUX(in)*PVY(in)-PUY(in)*PVX(in))
 
 !   IYS 20.01.2017
@@ -499,18 +499,18 @@ c  and per cell in EIRENE_IF3COP and kept in EIRMOD_CCOUPL.
             if (lpdenm) dmb2(in,jmol,1)=dmb2(in,jmol,1)+
      &                         pdenm(jmol,in)*1.0e6_dp
 !   IYS 20.01.2017
-! rfluxm, pfluxm and tfluxm are cell-centered mass flux densities
-! converted from g*(cm/s)/cm^3 to kg*(m/s)/m^3
+! rfluxm, pfluxm and tfluxm are cell-centered particle flux densities
+! The Eirene momentum densities are converted from g*(cm/s)/cm^3 to kg*(m/s)/m^3
             if (LVXDENM.AND.LVYDENM) then
               rfluxm(in,jmol,1)=rfluxm(in,jmol,1)+
      &             (VXDENM(jmol,in)*PVX(in)+
      &              VYDENM(jmol,in)*PVY(in))*
-     &           10.0_dp/NMASSM(jmol)/AMUAKG
+     &           10.0_dp/RMASSM(jmol)/AMUAKG
 
               pfluxm(in,jmol,1)=pfluxm(in,jmol,1)+
      &             (VXDENM(jmol,in)*PUX(in)+
      &              VYDENM(jmol,in)*PUY(in))*
-     &           10.0_dp/NMASSM(jmol)/AMUAKG
+     &           10.0_dp/RMASSM(jmol)/AMUAKG
             else if (laddv) then
              if(ia0+natmi+jmol.le.nadv)
      >         rfluxm(in,jmol,1)=rfluxm(in,jmol,1)+
@@ -520,7 +520,7 @@ c  and per cell in EIRENE_IF3COP and kept in EIRMOD_CCOUPL.
      &                                 addv(ia2+natmi+jmol,in)*1.0e4_dp
             end if
             if (LVZDENM) tfluxm(in,jmol,1)=tfluxm(in,jmol,1)+
-     &             VZDENM(jmol,in)*10.0_dp/NMASSM(jmol)/AMUAKG*
+     &             VZDENM(jmol,in)*10.0_dp/RMASSM(jmol)/AMUAKG*
      &             sign(1.0_dp,PUX(in)*PVY(in)-PUY(in)*PVX(in))
 
 !   IYS 20.01.2017
