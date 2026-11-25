@@ -355,8 +355,8 @@
         call eirene_neutr(44,ncvp,natmi,eneutrad,ncvp,natm,1,1) !ak+vk
       !c*** from 20261124 on:
         if (jvft44.ge.20261124) then
-          call write_title(44,'eplasrad',n2*natmi)
-          call eirene_neutr(44,ncvp,natmi,eplasrad,ncvp,natm,1,1)
+          call write_title(44,'eplsrad',n2*natmi)
+          call eirene_neutr(44,ncvp,natmi,eplsrad,ncvp,natm,1,1)
         end if
       !c*** from 20180323 on:
         if (nmoli.gt.0) then
@@ -469,8 +469,8 @@
         call eirene_neutr(44,ncvp,natmi,eneutrad,ncvp,natm,1,1) !ak+vk
       !c*** from 20261124 on:
         if (jvft44.ge.20261124) then
-          call write_title(44,'eplasrad',n2*natmi)
-          call eirene_neutr(44,ncvp,natmi,eplasrad,ncvp,natm,1,1)
+          call write_title(44,'eplsrad',n2*natmi)
+          call eirene_neutr(44,ncvp,natmi,eplsrad,ncvp,natm,1,1)
         end if
       !c*** from 20180323 on:
         if (nmoli.gt.0) then

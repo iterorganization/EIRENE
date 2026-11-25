@@ -3096,14 +3096,7 @@ cdr  only one bulk ion species per volume source stratum supported
           IPLSTI = MPLSTI(IPLS)
           DO 7472 IIRC=1,NPRCI(IPLS)
             IRRC=LGPRC(IPLS,IIRC)
-C  RPEL is a per-ATOM-species tally. The atom species comes from the
-C  reaction card itself: its product code (e.g. 211 = one neutral atom,
-C  item 2) is decoded by EIRENE into NATPRC(IRRC), the index in the
-C  neutral-atom list. This is exact even when two atoms share mass and
-C  charge (metastables, excited states), and it excludes higher charge
-C  states automatically: their recombination product is an ion, not an
-C  atom, so NATPRC(IRRC)=0 and the accumulation is skipped.
-            JATRC = NATPRC(IRRC)
+            JATRC = NATPRC(IRRC) ! index of atom which is the product of recombination reaction - taken from a reaction card
             IF (JATRC.LT.1 .OR. JATRC.GT.NATMI) JATRC = 0
             SUMN=0.0
             SUMM_VEC(0:2)=0.0
