@@ -88,7 +88,7 @@
       integer, public, save :: ini_iniusr=0
 
       !format flags for output files
-      integer, public, save :: jvft44=20260128, jvft46=20170930
+      integer, public, save :: jvft44=20261124, jvft46=20170930
 
       !names for atoms
       character*8, save, public, allocatable :: texta(:)
@@ -362,6 +362,11 @@
           call write_title(44,'eionrad',n2*nioni)
           call eirene_neutr(44,ncvp,nioni,eionrad,ncvp,nion,1,1)
         end if
+      !c*** from 20261124 on:
+        if (jvft44.ge.20261124) then
+          call write_title(44,'eplsrad',n2*natmi)
+          call eirene_neutr(44,ncvp,natmi,eplsrad,ncvp,natm,1,1)
+        end if
 
       !c*** from 20080706 on:
 
@@ -470,6 +475,11 @@
         if (nioni.gt.0) then
           call write_title(44,'eionrad',n2*nioni)
           call eirene_neutr(44,ncvp,nioni,eionrad,ncvp,nion,1,1)
+        end if
+      !c*** from 20261124 on:
+        if (jvft44.ge.20261124) then
+          call write_title(44,'eplsrad',n2*natmi)
+          call eirene_neutr(44,ncvp,natmi,eplsrad,ncvp,natm,1,1)
         end if
       endif ! NLWRMSH
       rewind (44)

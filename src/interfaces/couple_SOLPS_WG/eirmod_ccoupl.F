@@ -20,6 +20,11 @@
       REAL(DP), PUBLIC, SAVE ::
      R B2BREM,  B2RAD, B2QIE, B2VDP
 
+!     Radiation density due to recombination from singly ionized ions to neutrals
+!     including radiation during the capture of electron and a line radiation during the
+!     relaxation to the ground state, but excluding the bremsstrahlung
+      REAL(DP), PUBLIC, ALLOCATABLE, SAVE :: RPEL_COP(:,:)
+
       INTEGER, PUBLIC, TARGET, ALLOCATABLE, SAVE ::
      I         ICCPL1(:), ICCPL2(:)
       INTEGER, PUBLIC, ALLOCATABLE, SAVE ::
