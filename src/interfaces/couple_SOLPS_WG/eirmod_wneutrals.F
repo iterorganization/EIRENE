@@ -44,7 +44,7 @@
 !c***    eneutrad:  power radiated due to neutral atoms
 !c***    emolrad :  power radiated due to molecules
 !c***    eionrad :  power radiated due to molecular ions
-!c***    eplsrad:   power radiated due to recombination on singly ionized ions
+!c***    eplsrad:   power radiated due to recombination from singly ionized ions
 !c*** Surface data:
 !c***    wldnek  :  net kinetic energy deposited by neutrals
 !c***    wldnep  :  potential energy released by neutrals
